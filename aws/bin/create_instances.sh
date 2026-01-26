@@ -1,10 +1,15 @@
 #!/usr/bin/bash
+set -euo pipefail
 
 # Create 3 EC2 instances for the Nomad cluster (nomad1, nomad2, nomad3).
 # Requires: aws-cli configured with appropriate credentials.
 # Output: stdout of aws command appended to /tmp/aws_create_instances.log, stderr to terminal.
 # Output: prints ssh connection command for each instance to terminal.
 # Usage: ./aws_create_instances.sh
+
+# Check executable dependencies
+command -v aws &>/dev/null || { echo "Error: aws-cli required"; exit 1; }
+command -v jq &>/dev/null || { echo "Error: jq required"; exit 1; }
 
 instance_prefix="nomad"
 instance_ids=()

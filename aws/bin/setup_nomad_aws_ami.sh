@@ -75,6 +75,12 @@ sudo mkdir -p /opt/nomad/alloc_mounts     # Mounts for job allocations
 sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
 sudo yum install -y nomad
 
+# Test if Nomad systemd unit can be modified
+if [[ ! -f "${NOMAD_SYSTEMD_CONFIG}" ]]; then
+  echo "Error: Nomad systemd config not found or modifyable at ${NOMAD_SYSTEMD_CONFIG}"
+  exit 1
+fi
+
 # Set ownership and permissions
 sudo chown -R nomad:nomad /opt/nomad/alloc_mounts
 sudo chmod 750 /opt/nomad/alloc_mounts
@@ -87,7 +93,7 @@ if systemctl list-unit-files consul.service &>/dev/null; then
 fi
 
 # Modify Nomad systemd unit
-echo "Modyfing systemd service config at: ${NOMAD_SYSTEMD_CONFIG}"
+echo "Modifying systemd service config at: ${NOMAD_SYSTEMD_CONFIG}"
 sudo sed -i 's/^User=root/User=nomad/' ${NOMAD_SYSTEMD_CONFIG}
 sudo sed -i 's/^Group=root/Group=nomad/' ${NOMAD_SYSTEMD_CONFIG}
 

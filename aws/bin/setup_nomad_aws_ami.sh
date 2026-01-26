@@ -3,7 +3,7 @@
 # Install and configure Nomad on Amazon Linux (AWS EC2).
 # Sets up Nomad server+client, Docker driver, and systemd service.
 # Usage: ./setup_nomad_aws_ami.sh
-# Usage from repo: curl --proto '=https' --tlsv1.2 -sSf https://github.com/AlexSilver9/nomad-poc/blob/main/aws/bin/setup_nomad_aws_ami.sh | sh
+# Usage from repo: curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/setup_nomad_aws_ami.sh | sh
 
 # Function to ask yes/no questions, returns 0 for yes and 1 for no
 ask_user() {

@@ -22,11 +22,11 @@ done
 
 if [[ ${#nodes[@]} -eq 0 ]]; then
   echo "Error: No node addresses provided on stdin"
-  echo "Usage: echo -e 'host1\\nhost2\\nhost3' | ./setup_nomad_aws_ami.sh"
   exit 1
 fi
 
-echo "Using initial cluster nodes: ${nodes[*]}"
+echo "Using initial cluster nodes:"
+printf '  %s\n' "${nodes[@]}"
 
 # Build client retry_join array and servers array
 retry_join=""

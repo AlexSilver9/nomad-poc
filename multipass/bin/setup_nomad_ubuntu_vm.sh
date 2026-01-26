@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# Install and configure Nomad on Ubuntu (Multipass VM).
+# Sets up Nomad server+client, Docker driver, and systemd service.
+# Usage: ./setup_nomad_ubuntu_vm.sh
+
 # Config
 NOMAD_VERSION=1.11.1
 

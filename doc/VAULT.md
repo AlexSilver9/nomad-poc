@@ -95,7 +95,7 @@ vault policy list
 vault policy read admin
 ```
 
-# Enable auth method AppRole (recommended for machines)
+## Enable Auth Method AppRole (recommended for machines)
 
 ```shell
 vault auth enable approle
@@ -110,17 +110,32 @@ vault write auth/approle/role/admin \
   token_max_ttl=4h
 ```
 
-Get admin role id:
+Get admin role id (static id like username):
 
 ```shell
 vault read auth/approle/role/admin/role-id
 ```
 
-Create secret id (-f = no body specified -> Vault will create data):
+Create secret id (one-time-secret used to login like password)
 
 ```shell
+# -f means no body is specified -> Vault will create data
 vault write -f auth/approle/role/admin/secret-id
 ```
+
+
+## Enable Auth Method UserPass (recommended for humans)
+
+```shell
+vault auth enable userpass
+
+USERNAME=alex
+vault write auth/userpass/users/${USERNAME} \
+  password="StrongPasswordHere" \
+  policies=admin
+```
+
+
 
 
 

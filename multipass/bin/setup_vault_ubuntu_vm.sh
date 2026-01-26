@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# Install and configure HashiCorp Vault on Ubuntu (Multipass VM).
+# Sets up Vault server with Raft storage and systemd service.
+# Usage: ./setup_vault_ubuntu_vm.sh
+
 # Config
 VAULT_VERSION=1.15.6
 

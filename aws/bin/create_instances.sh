@@ -45,4 +45,7 @@ for instance_id in "${instance_ids[@]}"; do
     echo "Connect to node: ssh -o StrictHostKeyChecking=accept-new -i ~/workspace/nomad/nomad-keypair.pem ec2-user@$pubdns"
 done
 
+echo "Install Nomad command on EC2 instance:"
+echo "curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/setup_nomad_aws_ami.sh | sh"
+
 echo "Done"

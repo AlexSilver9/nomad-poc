@@ -2,11 +2,41 @@
 
 # Install and configure Nomad on Amazon Linux (AWS EC2).
 # Sets up Nomad server+client, Docker driver, and systemd service.
-# Usage: ./setup_nomad_aws_ami.sh
-# Usage from repo: curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/setup_nomad_aws_ami.sh | sh
+# Usage local:
+#   echo -e "<host1>\n<host2>\n<host3>" | ./setup_nomad_aws_ami.sh
+# Usage on EC2:
+#   ./get_public_dns_names.sh | ssh ec2-user@<host> 'bash -s' < ./setup_nomad_aws_ami.sh
+# Usage from repo:
+#   curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/setup_nomad_aws_ami.sh | sh
 
 # Variables
 NOMAD_SYSTEMD_CONFIG="/usr/lib/systemd/system/nomad.service"
+
+# Read cluster node addresses from stdin (one per line)
+echo "Please enter the cluster node addresses, one line per node..."
+nodes=()
+while IFS= read -r line; do
+  [[ -n "$line" ]] && nodes+=("$line")
+done
+
+if [[ ${#nodes[@]} -eq 0 ]]; then
+  echo "Error: No node addresses provided on stdin"
+  echo "Usage: echo -e 'host1\\nhost2\\nhost3' | ./setup_nomad_aws_ami.sh"
+  exit 1
+fi
+
+echo "Using initial cluster nodes: ${nodes[*]}"
+
+# Build client retry_join array and servers array
+retry_join=""
+servers=""
+for node in "${nodes[@]}"; do
+  retry_join+="      \"${node}:4648\",\n"
+  servers+="    \"${node}:4647\",\n"
+done
+# Remove trailing comma and newline
+retry_join=$(echo -e "$retry_join" | sed '$ s/,$//')
+servers=$(echo -e "$servers" | sed '$ s/,$//')
 
 # Function to ask yes/no questions, returns 0 for yes and 1 for no
 ask_user() {
@@ -60,7 +90,7 @@ echo "Modyfing systemd service config at: ${NOMAD_SYSTEMD_CONFIG}"
 sudo sed -i 's/^User=root/User=nomad/' ${NOMAD_SYSTEMD_CONFIG}
 sudo sed -i 's/^Group=root/Group=nomad/' ${NOMAD_SYSTEMD_CONFIG}
 
-# Create Nomad config (same as original)
+# Create Nomad config
 sudo tee /etc/nomad.d/nomad.hcl > /dev/null <<EOF
 data_dir = "/opt/nomad/data"
 bind_addr = "0.0.0.0"
@@ -76,14 +106,11 @@ plugin "docker" {
 
 server {
   enabled          = true
-  bootstrap_expect = 3
+  bootstrap_expect = ${#nodes[@]}
 
   server_join {
-    # Use AWS EC2 instance internal ips (from: ip a | grep inet)
     retry_join = [
-      "ec2-18-196-64-155.eu-central-1.compute.amazonaws.com:4648",
-      "ec2-18-199-83-245.eu-central-1.compute.amazonaws.com:4648",
-      "ec2-3-71-91-198.eu-central-1.compute.amazonaws.com:4648"
+${retry_join}
     ]
   }
 }
@@ -91,11 +118,8 @@ server {
 client {
   enabled = true
 
-  # Use AWS EC2 instance internal ips (from: ip a | grep inet)
   servers = [
-    "ec2-18-196-64-155.eu-central-1.compute.amazonaws.com:4647",
-    "ec2-18-199-83-245.eu-central-1.compute.amazonaws.com:4647",
-    "ec2-3-71-91-198.eu-central-1.compute.amazonaws.com:4647"
+${servers}
   ]
 }
 EOF

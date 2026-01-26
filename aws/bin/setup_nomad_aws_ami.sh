@@ -5,6 +5,9 @@
 # Usage: ./setup_nomad_aws_ami.sh
 # Usage from repo: curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/setup_nomad_aws_ami.sh | sh
 
+# Variables
+NOMAD_SYSTEMD_CONFIG="/usr/lib/systemd/system/nomad.service"
+
 # Function to ask yes/no questions, returns 0 for yes and 1 for no
 ask_user() {
   local question="$1"
@@ -45,18 +48,17 @@ sudo yum install -y nomad
 sudo chown -R nomad:nomad /opt/nomad/alloc_mounts
 sudo chmod 750 /opt/nomad/alloc_mounts
 
-# Modify Nomad systemd unit for Consul
-SYSTEMD_CONFIG="/usr/lib/systemd/system/nomad.service"
-if ask_user "Will Consul be installed along with Nomad?"; then
-  echo "Enabling Consul in systemd service config at: ${SYSTEMD_CONFIG}"
-  sudo sed -i 's/^#Wants=consul.service/Wants=consul.service/' ${SYSTEMD_CONFIG}
-  sudo sed -i 's/^#After=consul.service/After=consul.service/' ${SYSTEMD_CONFIG}
+# Modify Nomad systemd unit for Consul (if consul.service exists)
+if systemctl list-unit-files consul.service &>/dev/null; then
+  echo "Consul detected, enabling dependency in: ${NOMAD_SYSTEMD_CONFIG}"
+  sudo sed -i 's/^#Wants=consul.service/Wants=consul.service/' ${NOMAD_SYSTEMD_CONFIG}
+  sudo sed -i 's/^#After=consul.service/After=consul.service/' ${NOMAD_SYSTEMD_CONFIG}
 fi
 
 # Modify Nomad systemd unit
-echo "Modyfing systemd service config at: ${SYSTEMD_CONFIG}"
-sudo sed -i 's/^User=root/User=nomad/' ${SYSTEMD_CONFIG}
-sudo sed -i 's/^Group=root/Group=nomad/' ${SYSTEMD_CONFIG}
+echo "Modyfing systemd service config at: ${NOMAD_SYSTEMD_CONFIG}"
+sudo sed -i 's/^User=root/User=nomad/' ${NOMAD_SYSTEMD_CONFIG}
+sudo sed -i 's/^Group=root/Group=nomad/' ${NOMAD_SYSTEMD_CONFIG}
 
 # Create Nomad config (same as original)
 sudo tee /etc/nomad.d/nomad.hcl > /dev/null <<EOF
@@ -115,7 +117,7 @@ echo "Starting Nomad daemon..."
 sudo systemctl enable --now nomad
 
 # Optional: Add current user to docker group
-if ask_user "Do you want to add the current user ${LOGNAME} to docker group to enable running docker commands without sudo?"; then
+if ask_user "Do you want to add the current user ${LOGNAME} to docker group in order to enable running docker commands without sudo?"; then
   echo "Adding ${LOGNAME} to docker group..."
   sudo usermod -aG docker "${LOGNAME}"
   echo "Group added. For immediate effect run:  newgrp docker"

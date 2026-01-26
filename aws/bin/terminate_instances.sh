@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 
 # Terminate ALL EC2 instances in the account. Use with caution!
 # Requires: aws-cli, jq

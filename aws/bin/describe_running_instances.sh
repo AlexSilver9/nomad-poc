@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 
 # List all EC2 instances with their IPs and network info.
 # Requires: aws-cli, jq

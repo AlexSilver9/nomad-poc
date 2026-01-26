@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 
 # Create 3 EC2 instances for the Nomad cluster (nomad1, nomad2, nomad3).
 # Requires: aws-cli configured with appropriate credentials.

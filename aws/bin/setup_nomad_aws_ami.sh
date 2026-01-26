@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 
 # Install and configure Nomad on Amazon Linux (AWS EC2).
 # Sets up Nomad server+client, Docker driver, and systemd service.

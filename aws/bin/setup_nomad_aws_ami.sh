@@ -57,7 +57,7 @@ ask_user() {
 
 # Setup System
 sudo yum update -y
-sudo dnf upgrade --releasever=2023.10.20260120
+sudo yum upgrade -y
 sudo yum install -y unzip
 sudo yum install -y yum-utils
 sudo yum install -y shadow-utils

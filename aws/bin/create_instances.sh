@@ -42,7 +42,7 @@ echo "Fetching connection details..."
 for instance_id in "${instance_ids[@]}"; do
     pubdns=$(aws ec2 describe-instances --instance-ids "$instance_id" \
         | jq -r '.Reservations[0].Instances[0].PublicDnsName')
-    echo "Connect to node: ssh -i ~/workspace/nomad/nomad-keypair.pem ec2-user@$pubdns"
+    echo "Connect to node: ssh -o StrictHostKeyChecking=accept-new -i ~/workspace/nomad/nomad-keypair.pem ec2-user@$pubdns"
 done
 
 echo "Done"

@@ -79,9 +79,9 @@ server {
   server_join {
     # Use AWS EC2 instance internal ips (from: ip a | grep inet)
     retry_join = [
-      "ip-172-31-19-181.eu-central-1.compute.internal:4648",
-      "ip-172-31-20-138.eu-central-1.compute.internal:4648",
-      "ip-172-31-28-23.eu-central-1.compute.internal:4648"
+      "ec2-18-196-64-155.eu-central-1.compute.amazonaws.com:4648",
+      "ec2-18-199-83-245.eu-central-1.compute.amazonaws.com:4648",
+      "ec2-3-71-91-198.eu-central-1.compute.amazonaws.com:4648"
     ]
   }
 }
@@ -91,9 +91,9 @@ client {
 
   # Use AWS EC2 instance internal ips (from: ip a | grep inet)
   servers = [
-    "ip-172-31-19-181.eu-central-1.compute.internal:4647",
-    "ip-172-31-20-138.eu-central-1.compute.internal:4647",
-    "ip-172-31-28-23.eu-central-1.compute.internal:4647"
+    "ec2-18-196-64-155.eu-central-1.compute.amazonaws.com:4647",
+    "ec2-18-199-83-245.eu-central-1.compute.amazonaws.com:4647",
+    "ec2-3-71-91-198.eu-central-1.compute.amazonaws.com:4647"
   ]
 }
 EOF

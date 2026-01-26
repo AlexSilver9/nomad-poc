@@ -12,11 +12,12 @@
 # Variables
 NOMAD_SYSTEMD_CONFIG="/usr/lib/systemd/system/nomad.service"
 
-# Read cluster node addresses from stdin (one per line)
-echo "Please enter the cluster node addresses, one line per node..."
+# Read cluster node addresses (one per line, empty line to finish)
+echo "Enter cluster node addresses (one per line, empty line to finish):"
 nodes=()
-while IFS= read -r line; do
-  [[ -n "$line" ]] && nodes+=("$line")
+while IFS= read -r line </dev/tty; do
+  [[ -z "$line" ]] && break
+  nodes+=("$line")
 done
 
 if [[ ${#nodes[@]} -eq 0 ]]; then

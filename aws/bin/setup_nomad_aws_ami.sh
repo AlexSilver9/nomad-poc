@@ -3,6 +3,7 @@
 # Install and configure Nomad on Amazon Linux (AWS EC2).
 # Sets up Nomad server+client, Docker driver, and systemd service.
 # Usage: ./setup_nomad_aws_ami.sh
+# Usage from repo: curl --proto '=https' --tlsv1.2 -sSf https://github.com/AlexSilver9/nomad-poc/blob/main/aws/bin/setup_nomad_aws_ami.sh | sh
 
 # Function to ask yes/no questions, returns 0 for yes and 1 for no
 ask_user() {
@@ -77,9 +78,9 @@ server {
   server_join {
     # Use AWS EC2 instance internal ips (from: ip a | grep inet)
     retry_join = [
-      "172.31.31.203:4648",
-      "172.31.25.19:4648",
-      "172.31.16.100:4648"
+      "ip-172-31-22-235.eu-central-1.compute.internal:4648",
+      "ip-172-31-21-140.eu-central-1.compute.internal:4648",
+      "ip-172-31-25-173.eu-central-1.compute.internal:4648"
     ]
   }
 }
@@ -89,9 +90,9 @@ client {
 
   # Use AWS EC2 instance internal ips (from: ip a | grep inet)
   servers = [
-    "172.31.31.203:4647",
-    "172.31.25.19:4647",
-    "172.31.16.100:4647"
+    "ip-172-31-22-235.eu-central-1.compute.internal:4647",
+    "ip-172-31-21-140.eu-central-1.compute.internal:4647",
+    "ip-172-31-25-173.eu-central-1.compute.internal:4647"
   ]
 }
 EOF

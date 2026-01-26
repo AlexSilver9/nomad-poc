@@ -1,1 +1,1 @@
-This is a POC projet for a nomad cluster
+This is a POC project for a cluster that is managed by the Hashicorp Nomad container orchestrator.

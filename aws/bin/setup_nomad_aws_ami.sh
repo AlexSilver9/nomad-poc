@@ -22,6 +22,7 @@ ask_user() {
 
 # Setup System
 sudo yum update -y
+sudo dnf upgrade --releasever=2023.10.20260120
 sudo yum install -y unzip
 sudo yum install -y yum-utils
 sudo yum install -y shadow-utils
@@ -36,13 +37,13 @@ cat /sys/fs/cgroup/cgroup.controllers | grep -E 'cpuset|cpu|io|memory|pids' || e
 # Create Nomad directories
 sudo mkdir -p /opt/nomad/alloc_mounts     # Mounts for job allocations
 
-# Set ownership and permissions
-sudo chown -R nomad:nomad /opt/nomad/alloc_mounts
-sudo chmod 750 /opt/nomad/alloc_mounts
-
 # Download and install Nomad binary
 sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
 sudo yum install -y nomad
+
+# Set ownership and permissions
+sudo chown -R nomad:nomad /opt/nomad/alloc_mounts
+sudo chmod 750 /opt/nomad/alloc_mounts
 
 # Modify Nomad systemd unit for Consul
 SYSTEMD_CONFIG="/usr/lib/systemd/system/nomad.service"
@@ -78,9 +79,9 @@ server {
   server_join {
     # Use AWS EC2 instance internal ips (from: ip a | grep inet)
     retry_join = [
-      "ip-172-31-22-235.eu-central-1.compute.internal:4648",
-      "ip-172-31-21-140.eu-central-1.compute.internal:4648",
-      "ip-172-31-25-173.eu-central-1.compute.internal:4648"
+      "ip-172-31-19-181.eu-central-1.compute.internal:4648",
+      "ip-172-31-20-138.eu-central-1.compute.internal:4648",
+      "ip-172-31-28-23.eu-central-1.compute.internal:4648"
     ]
   }
 }
@@ -90,9 +91,9 @@ client {
 
   # Use AWS EC2 instance internal ips (from: ip a | grep inet)
   servers = [
-    "ip-172-31-22-235.eu-central-1.compute.internal:4647",
-    "ip-172-31-21-140.eu-central-1.compute.internal:4647",
-    "ip-172-31-25-173.eu-central-1.compute.internal:4647"
+    "ip-172-31-19-181.eu-central-1.compute.internal:4647",
+    "ip-172-31-20-138.eu-central-1.compute.internal:4647",
+    "ip-172-31-28-23.eu-central-1.compute.internal:4647"
   ]
 }
 EOF

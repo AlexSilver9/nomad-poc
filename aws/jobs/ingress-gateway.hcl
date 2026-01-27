@@ -1,30 +1,38 @@
 job "ingress-gateway" {
   datacenters = ["dc1"]
-  type = "service"
+
+  # Runs on all nodes for HA (or use type = "service" with count = 3 for specific replica count)
+  type = "system"
 
   group "ingress" {
-    count = 3
-
     network {
-      port "http" {
+      # Required for Consul Connect
+      mode = "bridge"
+
+      port "inbound" {
         static = 8080
+        to     = 8080
       }
     }
 
-    task "ingress" {
-      driver = "docker"
+    service {
+      name = "ingress-gateway"
+      port = "inbound"
 
-      config {
-        image = "hashicorp/consul-envoy"
-        ports = ["http"]
-      }
+      connect {
+        gateway {
+          proxy {}
 
-      service {
-        name = "ingress-gateway"
-        port = "http"
-        connect {
-          gateway {
-            ingress {}
+          ingress {
+            listener {
+              port     = 8080
+              protocol = "http"
+
+              service {
+                name  = "web-service"
+                hosts = ["*"]
+              }
+            }
           }
         }
       }

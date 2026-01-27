@@ -1,3 +1,6 @@
+# The traffic flow:
+# Client → :8080 → Ingress Gateway → Envoy Sidecar → web-service container
+
 job "web-service" {
   datacenters = ["dc1"]
   type = "service"
@@ -6,32 +9,37 @@ job "web-service" {
     count = 3
 
     network {
+      mode = "bridge"
+
       port "http" {
         to = 8080
       }
     }
 
-    task "web" {
-      driver = "docker"
-      config {
-        image = "hashicorp/http-echo"
-        args  = ["-text=hello world"]
-        ports = ["http"]
+    # Service block must be at group level for Consul Connect
+    service {
+      name = "web-service"
+      port = "http"
+
+      check {
+        type     = "http"
+        path     = "/"
+        interval = "10s"
+        timeout  = "2s"
       }
 
-      service {
-        name = "web"
-        port = "http"
-        check {
-          type     = "http"
-          path     = "/health"
-          interval = "10s"
-          timeout  = "2s"
-        }
-        connect {
-          # Discovery über Ingress Gateway
-          sidecar_service {}
-        }
+      connect {
+        sidecar_service {}
+      }
+    }
+
+    task "web" {
+      driver = "docker"
+
+      config {
+        image = "hashicorp/http-echo"
+        args  = ["-text=hello world", "-listen=:8080"]
+        ports = ["http"]
       }
     }
   }

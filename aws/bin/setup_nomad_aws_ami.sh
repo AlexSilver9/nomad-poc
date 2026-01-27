@@ -83,14 +83,17 @@ if [[ ! -f "${NOMAD_SYSTEMD_CONFIG}" ]]; then
   exit 1
 fi
 
-# Set ownership and permissions
-sudo chown -R nomad:nomad /opt/nomad/alloc_mounts
-sudo chmod 750 /opt/nomad/alloc_mounts
-
 # Integrate Nomad with Consul if consul.service exists
 consul_config=""
+nomad_user=""
+nomad_group=""
 if systemctl list-unit-files consul.service &>/dev/null; then
   echo "Consul detected, enabling Nomad-Consul integration"
+
+  # To integrate Consul with Nomad via CNI bridge network
+  # nomad must run as root to configure iptables for the network namespace
+  nomad_user="root"
+  nomad_group="root"
 
   # Modify Nomad systemd unit to depend on Consul
   sudo sed -i 's/^#Wants=consul.service/Wants=consul.service/' ${NOMAD_SYSTEMD_CONFIG}
@@ -111,15 +114,23 @@ consul {
   curl -sSL "https://github.com/containernetworking/plugins/releases/download/${CNI_VERSION}/cni-plugins-linux-amd64-${CNI_VERSION}.tgz" \
     | sudo tar -xz -C /opt/cni/bin
   # Nomad runs network namespace operations as root (even if the main process runs as nomad)
-  # CNI plugins are executed with elevated privileges to configure network interfaces
-  sudo chown -R root:root /opt/cni
+  sudo chown -R $nomad_user:$nomad_group /opt/cni
   sudo chmod -R 755 /opt/cni
+
+else
+  # Without Consul integration Nomad can run as user nomad
+  nomad_user="nomad"
+  nomad_group="nomad"
+
+  # Modify Nomad systemd unit
+  echo "Modifying systemd service config at: ${NOMAD_SYSTEMD_CONFIG}"
+  sudo sed -i 's/^User=root/User='$nomad_user'/' ${NOMAD_SYSTEMD_CONFIG}
+  sudo sed -i 's/^Group=root/Group='$nomad_group'/' ${NOMAD_SYSTEMD_CONFIG}
 fi
 
-# Modify Nomad systemd unit
-echo "Modifying systemd service config at: ${NOMAD_SYSTEMD_CONFIG}"
-sudo sed -i 's/^User=root/User=nomad/' ${NOMAD_SYSTEMD_CONFIG}
-sudo sed -i 's/^Group=root/Group=nomad/' ${NOMAD_SYSTEMD_CONFIG}
+# Set ownership and permissions
+sudo chown -R $nomad_user:$nomad_group /opt/nomad/alloc_mounts
+sudo chmod 750 /opt/nomad/alloc_mounts
 
 # Create Nomad config
 sudo tee /etc/nomad.d/nomad.hcl > /dev/null <<EOF
@@ -163,8 +174,8 @@ sudo yum install -y docker
 # Start & enable Docker
 sudo systemctl enable --now docker
 
-# Configure Nomad to access Docker (double check with: `groups nomad`)
-sudo usermod -aG docker nomad
+# Configure Nomad to access Docker (double check with: `groups nomad` or `groups root`)
+sudo usermod -aG docker $nomad_group
 
 # Reload systemd and start Nomad
 echo "Reloading systemd daemon..."
@@ -177,10 +188,8 @@ sudo systemctl enable --now nomad
 if ask_user "Do you want to add the current user ${LOGNAME} to docker group in order to enable running docker commands without sudo?"; then
   echo "Adding ${LOGNAME} to docker group..."
   sudo usermod -aG docker "${LOGNAME}"
-  echo "Group added. For immediate effect run:  newgrp docker"
+  echo "Group added. For immediate effect run: `newgrp docker`"
   echo "Or log out and back in."
-else
-  echo "Skipping adding ${LOGNAME} to docker group."
 fi
 
 echo "Done"

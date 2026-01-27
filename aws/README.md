@@ -16,28 +16,52 @@ This installs the Nomad agent in both server and client mode, along with Docker.
 
 | Script | Description |
 |--------|-------------|
-| `bin/create_instances.sh` | Create 3 EC2 instances (nomad1, nomad2, nomad3) |
-| `bin/describe_running_instances.sh` | List all instances with IPs and network info |
-| `bin/get_public_dns_names.sh` | Output public DNS names (one per line) |
-| `bin/terminate_instances.sh` | Terminate ALL EC2 instances (use with caution) |
-| `bin/setup_consul_aws_ami.sh` | Install Consul on Amazon Linux |
-| `bin/setup_nomad_aws_ami.sh` | Install Nomad + Docker on Amazon Linux |
+| `create_instances.sh` | Create 3 EC2 instances (nomad1, nomad2, nomad3) |
+| `describe_running_instances.sh` | List all instances with IPs and network info |
+| `terminate_instances.sh` | Terminate ALL EC2 instances (use with caution) |
+| `get_public_dns_names.sh` | Output public DNS names (one per line) |
+| `setup_consul_aws_ami.sh` | Install Consul on Amazon Linux |
+| `setup_nomad_aws_ami.sh` | Install Nomad + Docker on Amazon Linux |
+| `create_target_group.sh` | Create ALB target group for ingress gateway |
+| `create_alb.sh` | Create Application Load Balancer |
+| `delete_target_group.sh` | Delete target group(s) |
+| `delete_alb.sh` | Delete ALB(s) |
+
 
 ## Setup Workflow
 
+Lifecycle Overview:
+1. Create instances and get public DNS names
+2. Setup Consul in AWS EC2 instances
+3. Setup Nomad in AWS EC2 instances
+4. Download Nomad jobs & service-defaults
+5. Configure Consul for HTTP Web-Service
+6. Run Ingress-Gateway job
+7. Run Web-Service job
+8. Create AWS target group
+9. Create AWS load balancer
+10. Terminate AWS EC2 intances
+11. Delete AWS target group
+12. Delete AWS load balancer
+
 ### Create AWS EC2 instances
 
-1. Create instances:
+1. Go to bin dir:
    ```shell
-   ./bin/create_instances.sh
+   cd ./bin
    ```
 
-2. Get public DNS names of all instances:
+2. Create instances:
    ```shell
-   ./bin/get_public_dns_names.sh
+   ./create_instances.sh
    ```
 
-### Setup Consul (Optional)
+3. Get public DNS names of all instances:
+   ```shell
+   ./get_public_dns_names.sh
+   ```
+
+### Setup Consul
 
 For service mesh capabilities, install Consul before Nomad:
 
@@ -69,6 +93,7 @@ For service mesh capabilities, install Consul before Nomad:
    nomad server members
    nomad node status
    nomad node status -self -verbose | grep cni
+   nomad node status -self -verbose | grep consul
    ```
 
 ## Ingress-Gateway & Web-Service 
@@ -90,9 +115,34 @@ For service mesh capabilities, install Consul before Nomad:
    nomad job run ingress-gateway.hcl
    ```
 
-3. Start the Web-Service
+4. Start the Web-Service
    ```shell
    nomad job run web-service.hcl
+   ```
+
+## AWS Application Load Balancer
+
+Create an ALB to route external traffic to the ingress gateway:
+
+1. Create a target group (registers all running instances on port 8080):
+   ```shell
+   ./create_target_group.sh nomad-target-group
+   ```
+
+2. Create the ALB with the target group ARN from previous step:
+   ```shell
+   target_group_arn=$(aws elbv2 describe-target-groups --names nomad-target-group --query 'TargetGroups[0].TargetGroupArn' --output text)
+   ./create_alb.sh $target_group_arn nomad-alb
+   ```
+
+3. Check/Wait for targets become healthy:
+   ```shell
+   aws elbv2 describe-target-health --target-group-arn $target_group_arn
+   ```
+
+4. Test the ALB (after targets become healthy):
+   ```shell
+   curl http://<alb-dns-name>/
    ```
 
 

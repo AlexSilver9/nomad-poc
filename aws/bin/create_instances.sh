@@ -51,7 +51,7 @@ echo "curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/Ale
 echo "Command to install Nomad on EC2 instances:"
 echo "curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/setup_nomad_aws_ami.sh | sh"
 
-echo "Public DNS names of the EC2 instances:
+echo "Public DNS names of the EC2 instances:"
 ./get_public_dns_names.sh
 
 echo "Done"

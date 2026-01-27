@@ -18,7 +18,9 @@ This installs the Nomad agent in both server and client mode, along with Docker.
 |--------|-------------|
 | `bin/create_instances.sh` | Create 3 EC2 instances (nomad1, nomad2, nomad3) |
 | `bin/describe_running_instances.sh` | List all instances with IPs and network info |
+| `bin/get_public_dns_names.sh` | Output public DNS names (one per line) |
 | `bin/terminate_instances.sh` | Terminate ALL EC2 instances (use with caution) |
+| `bin/setup_consul_aws_ami.sh` | Install Consul on Amazon Linux |
 | `bin/setup_nomad_aws_ami.sh` | Install Nomad + Docker on Amazon Linux |
 
 ## Setup Workflow
@@ -47,6 +49,25 @@ This installs the Nomad agent in both server and client mode, along with Docker.
    nomad node status
    ```
 
+## Setup with Consul Integration
+
+For service mesh capabilities, install Consul before Nomad:
+
+1. On each instance, run Consul setup first:
+   ```shell
+   curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/setup_consul_aws_ami.sh | sh
+   ```
+
+2. Verify Consul cluster:
+   ```shell
+   consul members
+   ```
+
+3. Then run Nomad setup (auto-detects Consul):
+   ```shell
+   curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/setup_nomad_aws_ami.sh | sh
+   ```
+
 ## Requirements
 
 - AWS CLI configured with appropriate credentials
@@ -54,11 +75,11 @@ This installs the Nomad agent in both server and client mode, along with Docker.
 - EC2 key pair named `nomad-keypair`
 
 
-## VPC-ID
+## Current VPC-ID
 
 - vpc-ec926686
 
-# Security Groups
+# Current Security Groups
 
 - sg-77476f14 (default)
 - sg-09aa7199da65ed0e3 (HTTP)

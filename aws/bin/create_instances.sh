@@ -22,7 +22,7 @@ for i in {1..3}; do
         --image-id 'ami-0191d47ba10441f0b' \
         --instance-type 't3.micro' \
         --key-name 'nomad-keypair' \
-        --network-interfaces '{"SubnetId":"subnet-3ee53954","AssociatePublicIpAddress":true,"DeviceIndex":0,"Groups":["sg-07fee22cbcdad4c58","sg-09aa7199da65ed0e3","sg-0beaa6c98d73ebd3b","sg-0f8786bbac15b8c6f","sg-77476f14"]}' \
+        --network-interfaces '{"SubnetId":"subnet-3ee53954","AssociatePublicIpAddress":true,"DeviceIndex":0,"Groups":["sg-07fee22cbcdad4c58","sg-09aa7199da65ed0e3","sg-0beaa6c98d73ebd3b","sg-0f8786bbac15b8c6f","sg-77476f14", "sg-0c17efcf1cd6a0dc8"]}' \
         --credit-specification '{"CpuCredits":"unlimited"}' \
         --tag-specifications '{"ResourceType":"instance","Tags":[{"Key":"Name","Value":"'"$name"'"}]}' \
         --metadata-options '{"HttpEndpoint":"enabled","HttpPutResponseHopLimit":2,"HttpTokens":"required"}' \
@@ -44,6 +44,9 @@ for instance_id in "${instance_ids[@]}"; do
         | jq -r '.Reservations[0].Instances[0].PublicDnsName')
     echo "Connect to node: ssh -o StrictHostKeyChecking=accept-new -i ~/workspace/nomad/nomad-keypair.pem ec2-user@$pubdns"
 done
+
+echo "Command to install Consul on EC2 instances:"
+echo "curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/setup_consul_aws_ami.sh | sh"
 
 echo "Command to install Nomad on EC2 instances:"
 echo "curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/setup_nomad_aws_ami.sh | sh"

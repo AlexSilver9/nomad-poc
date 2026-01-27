@@ -62,7 +62,7 @@ sudo yum install -y unzip
 sudo yum install -y yum-utils
 sudo yum install -y shadow-utils
 
-# Get Host IP (just for info)
+# Print Host IP (for reference)
 ip a | grep inet
 
 # Verify Nomad cgroup v2 pre-requisites (same check — assuming cgroup v2 environment)
@@ -86,11 +86,18 @@ fi
 sudo chown -R nomad:nomad /opt/nomad/alloc_mounts
 sudo chmod 750 /opt/nomad/alloc_mounts
 
-# Modify Nomad systemd unit for Consul (if consul.service exists)
+# Modify Nomad systemd unit for integration with Consul if consul.service exists
+consul_config=""
 if systemctl list-unit-files consul.service &>/dev/null; then
-  echo "Consul detected, enabling dependency in: ${NOMAD_SYSTEMD_CONFIG}"
+  echo "Consul detected, enabling Nomad-Consul integration"
   sudo sed -i 's/^#Wants=consul.service/Wants=consul.service/' ${NOMAD_SYSTEMD_CONFIG}
   sudo sed -i 's/^#After=consul.service/After=consul.service/' ${NOMAD_SYSTEMD_CONFIG}
+
+  consul_config='
+consul {
+  address = "127.0.0.1:8500"
+}
+'
 fi
 
 # Modify Nomad systemd unit
@@ -111,6 +118,8 @@ plugin "docker" {
     }
   }
 }
+
+${consul_config}
 
 server {
   enabled          = true
@@ -138,7 +147,7 @@ sudo yum install -y docker
 # Start & enable Docker
 sudo systemctl enable --now docker
 
-# Configure Nomad to access Docker (double check with: groups nomad)
+# Configure Nomad to access Docker (double check with: `groups nomad`)
 sudo usermod -aG docker nomad
 
 # Reload systemd and start Nomad
@@ -159,10 +168,10 @@ else
 fi
 
 echo "Done"
-echo "Check nomad systems status:   sudo systemctl status nomad"
-echo "Check docker systemd status:  sudo systemctl status docker"
-echo "Check nomad log:              journalctl -u nomad.service"
-echo "Follow recent nomad log:      journalctl -u nomad.service -f"
-echo "Check nomad server cluster:   nomad server members"
-echo "Check nomad jobs status:      nomad status"
+echo "Check Nomad systems status:   sudo systemctl status nomad"
+echo "Check Docker systemd status:  sudo systemctl status docker"
+echo "Check Nomad log:              journalctl -u nomad.service"
+echo "Follow recent Nomad log:      journalctl -u nomad.service -f"
+echo "Check Nomad server cluster:   nomad server members"
+echo "Check Nomad jobs status:      nomad status"
 echo "Nomad UI (if server):         http://<instance-ip>:4646"

@@ -25,48 +25,76 @@ This installs the Nomad agent in both server and client mode, along with Docker.
 
 ## Setup Workflow
 
+### Create AWS EC2 instances
+
 1. Create instances:
    ```shell
    ./bin/create_instances.sh
    ```
 
-2. SSH into each instance and run the setup script:
+2. Get public DNS names of all instances:
+   ```shell
+   ./bin/get_public_dns_names.sh
+   ```
+
+### Setup Consul (Optional)
+
+For service mesh capabilities, install Consul before Nomad:
+
+1. SSH into each instance and run the setup:
+   ```shell
+   ssh -i ~/workspace/nomad/nomad-keypair.pem ec2-user@<public-dns>
+   curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/setup_consul_aws_ami.sh | sh
+   ```
+
+2. Paste the public DNS names of all instances from previously called `get_public_dns_names.sh`
+
+3. Verify Consul cluster:
+   ```shell
+   consul members
+   ```
+
+### Setup Nomad
+
+1. SSH into each instance and run the setup:
    ```shell
    ssh -i ~/workspace/nomad/nomad-keypair.pem ec2-user@<public-dns>
    curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/setup_nomad_aws_ami.sh | sh
    ```
 
-3. After setup, update `/etc/nomad.d/nomad.hcl` on each node with the internal IPs of all 3 instances (use `ip a | grep inet` to find them).
+2. Paste the public DNS names of all instances from previously called `get_public_dns_names.sh`
 
-4. Restart Nomad:
-   ```shell
-   sudo systemctl restart nomad
-   ```
-
-5. Verify cluster:
+3. Verify cluster:
    ```shell
    nomad server members
    nomad node status
+   nomad node status -self -verbose | grep cni
    ```
 
-## Setup with Consul Integration
+## Ingress-Gateway & Web-Service 
 
-For service mesh capabilities, install Consul before Nomad:
-
-1. On each instance, run Consul setup first:
+1. SSH into any instance and download the Nomad job definitions
    ```shell
-   curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/setup_consul_aws_ami.sh | sh
+   wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/ingress-gateway.hcl
+   wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/web-service-defaults.hcl
+   wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/web-service.hcl
    ```
 
-2. Verify Consul cluster:
+2. Configure Consul to know that the Web-Service is of type HTTP rather than TCP
    ```shell
-   consul members
+   consul config write web-service-defaults.hcl
    ```
 
-3. Then run Nomad setup (auto-detects Consul):
+3. Start the Ingress-Gateway
    ```shell
-   curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/setup_nomad_aws_ami.sh | sh
+   nomad job run ingress-gateway.hcl
    ```
+
+3. Start the Web-Service
+   ```shell
+   nomad job run web-service.hcl
+   ```
+
 
 ## Requirements
 

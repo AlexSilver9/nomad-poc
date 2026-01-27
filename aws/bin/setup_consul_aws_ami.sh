@@ -89,6 +89,11 @@ connect {
   enabled = true
 }
 
+# gRPC port for Envoy xDS (Connect gateways require Consul's gRPC interface to communicate with Envoy sidecars)
+ports {
+  grpc = 8502
+}
+
 # Performance tuning
 performance {
   raft_multiplier = 1

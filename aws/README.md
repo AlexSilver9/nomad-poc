@@ -34,8 +34,8 @@ Lifecycle Overview:
 1. Create instances and get public DNS names
 2. Setup Consul in AWS EC2 instances
 3. Setup Nomad in AWS EC2 instances
-4. Download Nomad jobs & service-defaults
-5. Configure Consul for HTTP Web-Service
+4. Download Nomad jobs & service-defaults & ingress-intentions
+5. Configure Consul for HTTP Web-Service service-defaults & ingress-intentions
 6. Run Ingress-Gateway job
 7. Run Web-Service job
 8. Create AWS target group
@@ -98,16 +98,20 @@ For service mesh capabilities, install Consul before Nomad:
 
 ## Ingress-Gateway & Web-Service 
 
-1. SSH into any instance and download the Nomad job definitions
+1. SSH into any instance and download the Nomad job definitions, service-defaults & ingress-intentions
    ```shell
    wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/ingress-gateway.hcl
    wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/web-service-defaults.hcl
    wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/web-service.hcl
+   wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/ingress-intentions.hcl
    ```
 
-2. Configure Consul to know that the Web-Service is of type HTTP rather than TCP
+2. Configure Consul Web-Service service-defaults & ingress-intentions
    ```shell
    consul config write web-service-defaults.hcl
+   # Check with: consul config read -kind service-defaults -name web-service
+   consul config write ingress-intentions.hcl
+   # Check with: consul config read -kind service-intentions -name web-service
    ```
 
 3. Start the Ingress-Gateway
@@ -118,6 +122,11 @@ For service mesh capabilities, install Consul before Nomad:
 4. Start the Web-Service
    ```shell
    nomad job run web-service.hcl
+   ```
+
+5. Check Ingress-Gateway
+   ```shell
+   curl -v http://localhost:8080/
    ```
 
 ## AWS Application Load Balancer

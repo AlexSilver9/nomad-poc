@@ -12,6 +12,7 @@ set -euo pipefail
 
 # Variables
 NOMAD_SYSTEMD_CONFIG="/usr/lib/systemd/system/nomad.service"
+CNI_VERSION="v1.4.0"
 
 # Read cluster node addresses (one per line, empty line to finish)
 echo "Enter cluster node addresses (one per line, empty line to finish):"
@@ -86,18 +87,33 @@ fi
 sudo chown -R nomad:nomad /opt/nomad/alloc_mounts
 sudo chmod 750 /opt/nomad/alloc_mounts
 
-# Modify Nomad systemd unit for integration with Consul if consul.service exists
+# Integrate Nomad with Consul if consul.service exists
 consul_config=""
 if systemctl list-unit-files consul.service &>/dev/null; then
   echo "Consul detected, enabling Nomad-Consul integration"
+
+  # Modify Nomad systemd unit to depend on Consul
   sudo sed -i 's/^#Wants=consul.service/Wants=consul.service/' ${NOMAD_SYSTEMD_CONFIG}
   sudo sed -i 's/^#After=consul.service/After=consul.service/' ${NOMAD_SYSTEMD_CONFIG}
 
+  # Prepare Consul config block for Nomad config
   consul_config='
 consul {
   address = "127.0.0.1:8500"
 }
 '
+
+  # Install CNI plugins (required for Consul Connect bridge networking)
+  # https://developer.hashicorp.com/nomad/docs/networking/cni
+  # CNI plugins must be owned by root - they run with elevated privileges
+  echo "Installing CNI plugins ${CNI_VERSION}..."
+  sudo mkdir -p /opt/cni/bin
+  curl -sSL "https://github.com/containernetworking/plugins/releases/download/${CNI_VERSION}/cni-plugins-linux-amd64-${CNI_VERSION}.tgz" \
+    | sudo tar -xz -C /opt/cni/bin
+  # Nomad runs network namespace operations as root (even if the main process runs as nomad)
+  # CNI plugins are executed with elevated privileges to configure network interfaces
+  sudo chown -R root:root /opt/cni
+  sudo chmod -R 755 /opt/cni
 fi
 
 # Modify Nomad systemd unit
@@ -174,4 +190,6 @@ echo "Check Nomad log:              journalctl -u nomad.service"
 echo "Follow recent Nomad log:      journalctl -u nomad.service -f"
 echo "Check Nomad server cluster:   nomad server members"
 echo "Check Nomad jobs status:      nomad status"
+echo "Check Nomad node status:      nomad node status -self -verbose"
+echo "Check Nomad cni status:       nomad node status -self -verbose | grep cni"
 echo "Nomad UI (if server):         http://<instance>:4646"

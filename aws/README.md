@@ -98,20 +98,24 @@ For service mesh capabilities, install Consul before Nomad:
 
 ## Ingress-Gateway & Web-Service 
 
-1. SSH into any instance and download the Nomad job definitions, service-defaults & ingress-intentions
+1. SSH into any instance and download the Nomad job definitions and Consul config entries
    ```shell
    wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/ingress-gateway.hcl
+   wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/ingress-gateway-config.hcl
    wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/web-service-defaults.hcl
    wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/web-service.hcl
    wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/ingress-intentions.hcl
    ```
 
-2. Configure Consul Web-Service service-defaults & ingress-intentions
+2. Configure Consul config entries (service-defaults, ingress-gateway, intentions)
    ```shell
    consul config write web-service-defaults.hcl
-   # Check with: consul config read -kind service-defaults -name web-service
+   consul config write ingress-gateway-config.hcl
    consul config write ingress-intentions.hcl
-   # Check with: consul config read -kind service-intentions -name web-service
+   # Verify:
+   consul config read -kind service-defaults -name web-service
+   consul config read -kind ingress-gateway -name ingress-gateway
+   consul config read -kind service-intentions -name web-service
    ```
 
 3. Start the Ingress-Gateway
@@ -127,6 +131,11 @@ For service mesh capabilities, install Consul before Nomad:
 5. Check Ingress-Gateway
    ```shell
    curl -v http://localhost:8080/
+   ```
+
+6. Check if web-service sidecar accepts connections on its proxy port:
+   ```shell
+   curl -v http://172.31.16.188:31337/
    ```
 
 ## AWS Application Load Balancer

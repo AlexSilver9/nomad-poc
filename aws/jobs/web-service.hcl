@@ -29,7 +29,11 @@ job "web-service" {
       }
 
       connect {
-        sidecar_service {}
+        sidecar_service {
+          proxy {
+            local_service_port = 8080
+          }
+        }
       }
     }
 

@@ -1,6 +1,6 @@
 # AWS Nomad Cluster
 
-How to deploy a full featured Nomad cluster on AWS EC2 instances.
+Deploy a full featured Nomad cluster on AWS EC2 instances.
 
 
 ## Architecture

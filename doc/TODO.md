@@ -8,8 +8,16 @@
 - System Batch Jobs
 - Periodic Batch Job (Cron)
 - Job Lifecycle (Pre, Post, Sidecar, etc ...)
+- Nginx Routing per URL mit Rewrite
 
 # TODO:
+- Resources OOM doesn't raise
+- Deploments auf verschiedenen Ports (1 Alloc)
+- Node-Schwenk
+- Node drain -> startet erst neue Allocs auf anderer Instanz und drained dann, oder andersrum?
+    - Testen wie nah man an echte Zero-Downtime ran
+- Node drain per UI?
+- Rolling Updates der Container
 - AWS LoadBalancer -> Ingress Routing zum indizierten Container via DNS (insbesondere wenn Allocs dynamisch auf Nodes verteilt werden) 
 - Docker Stateful Jobs
 - Allocations auf andere Nodes verschieben, zwecks Sytemupgrade
@@ -30,13 +38,11 @@
 - Volumes (lokaler flüchtiger Storage)
 - CSI (Container Storage Interface - Persistent Volume Mount - CSI Plugin Driver)
 - Ingress / Load-Balancing
-- Rolling Updates der Container
 - Nomad Binary Update (https://developer.hashicorp.com/nomad/docs/upgrade) (https://developer.hashicorp.com/nomad/docs/upgrade/upgrade-specific)
 - systemd Unit Update
 - node pools & constraints
 - Port Forwarding (https://github.com/hashicorp/nomad/issues/6925)
-
+- Migrationskonzept
 
 # OPTIONAL:
 - Observability (Prometheus)
-

@@ -4,7 +4,7 @@ job "traefik-rewrite" {
 
   group "traefik" {
     network {
-      mode = "host"  # Required to bind to host port 443 and reach Envoy at 127.0.0.1:8080
+      mode = "host"  # Required to bind to host port 8081 and reach Envoy at 127.0.0.1:8080
     }
 
     task "traefik" {
@@ -15,7 +15,7 @@ job "traefik-rewrite" {
         network_mode = "host"  # Bind directly to host network
 
         args = [
-          "--entrypoints.web.address=:443",
+          "--entrypoints.web.address=:8081",
           "--providers.file.filename=/etc/traefik/dynamic.yaml",
           "--log.level=DEBUG",  # Helpful for debugging
         ]

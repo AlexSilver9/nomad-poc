@@ -6,7 +6,7 @@ Deploy a full featured Nomad cluster on AWS EC2 instances.
 ## Architecture
 
 ```
-AWS ALB:443 → Traefik:443 (URL Rewrite) → Consul Envoy:8080 (Ingress) → Sidecars → Services
+AWS ALB:443 → Traefik:8081 (URL Rewrite) → Consul Envoy:8080 (Ingress) → Sidecars → Services
 ```
 
 - **Traefik**: Handles regex URL rewrites (e.g., `/download/123` → `/business-service/download.xhtml?token=123`)
@@ -44,7 +44,7 @@ Lifecycle:
 | 6.     | Any EC2 Instance  | Run Traefik-Rewrite job                                                   |
 | 7.     | Any EC2 Instance  | Run Ingress-Gateway job                                                   |
 | 8.     | Any EC2 Instance  | Run Web-Service job                                                       |
-| 9.     | Setup Shell       | Create AWS target group (port 443 for Traefik)                            |
+| 9.     | Setup Shell       | Create AWS target group (port 8081 for Traefik)                            |
 | 10.    | Setup Shell       | Create AWS load balancer                                                  |
 | 11.    | Setup Shell       | Terminate AWS EC2 instances                                               |
 | 12.    | Setup Shell       | Delete AWS load balancer                                                  |
@@ -168,28 +168,32 @@ For service mesh capabilities, install Consul before Nomad:
 
    Test Traefik → Envoy → web-service (default):
    ```shell
-   curl http://localhost:443/
+   curl http://localhost:8081/
    # Expected: "hello world" (web-service)
    ```
 
    Test Traefik → Envoy → business-service (specific host):
    ```shell
-   curl -H "Host: business-service" http://localhost:443/
-   # Expected: whoami output with "Name: business-service" and "GET /"
+   curl -sH "Host: business-service" http://localhost:8081/ | grep GET && \
+   curl -sH "Host: business-service" http://localhost:8081/ | grep Name
+   # Expected: "GET / ..."
+   # Expected: "Name: business-service"
    ```
 
    Test business-service routing (requires Host header):
    ```shell
    # Default route → business-service
-   curl -H "Host: business-service" http://localhost:8080/
-   # Expected: whoami output with "Name: business-service"
+   curl -sH "Host: business-service" http://localhost:8080/ | grep Name
+   # Expected: "Name: business-service"
 
    # Legacy API route → business-service-api
-   curl -H "Host: business-service" http://localhost:8080/legacy-business-service/test
-   # Expected: whoami output with "Name: business-service-api" and "GET /legacy-business-service/test"
+   curl -sH "Host: business-service" http://localhost:8080/legacy-business-service/test | grep GET && \
+   curl -sH "Host: business-service" http://localhost:8080/legacy-business-service/test | grep Name
+   # Expected: "GET /legacy-business-service/test ..."
+   # Expected: "Name: business-service-api"
 
    # Download route (via Traefik rewrite) - verifies URL rewriting works
-   curl -H "Host: business-service" http://localhost:443/download/mytoken123
+   curl -L -H "Host: business-service" http://localhost:8081/download/mytoken123
    # Expected: whoami output showing the rewritten path:
    #   Name: business-service
    #   GET /business-service/download.xhtml?token=mytoken123
@@ -199,7 +203,7 @@ For service mesh capabilities, install Consul before Nomad:
 
 Create an ALB to route external traffic to Traefik:
 
-1. Return to shell for setup and create a target group (registers all running instances on port 443 for Traefik):
+1. Return to shell for setup and create a target group (registers all running instances on port 8081 for Traefik):
    ```shell
    ./create_target_group.sh nomad-target-group
    ```

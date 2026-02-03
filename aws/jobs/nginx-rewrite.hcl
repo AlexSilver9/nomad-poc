@@ -4,7 +4,7 @@ job "nginx-rewrite" {
 
   group "nginx" {
     network {
-      mode = "host"  # Required to bind to host port 443 and reach Envoy at 127.0.0.1:8080
+      mode = "host"  # Required to bind to host port 8081 and reach Envoy at 127.0.0.1:8080
     }
 
     task "nginx" {
@@ -37,7 +37,8 @@ http {
     }
 
     server {
-        listen 443;
+        # Plain HTTP on port 8081
+        listen 8081 default_server;
         server_name business-service;
 
         # Route: /download/* with regex rewrite
@@ -46,6 +47,7 @@ http {
             # Rewrite and proxy (internal redirect, no 302)
             rewrite ^/download/(.*)$ /business-service/download.xhtml?token=$1 break;
             proxy_pass http://envoy_ingress;
+            proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -55,6 +57,7 @@ http {
         # Default: passthrough to Envoy
         location / {
             proxy_pass http://envoy_ingress;
+            proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -62,19 +65,6 @@ http {
         }
     }
 
-    # Default server for other hosts (e.g., localhost)
-    server {
-        listen 443 default_server;
-        server_name _;
-
-        location / {
-            proxy_pass http://envoy_ingress;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-        }
-    }
 }
 EOF
         destination = "local/nginx.conf"

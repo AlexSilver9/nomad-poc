@@ -46,6 +46,11 @@ job "web-service" {
         args  = ["-text=hello world", "-listen=:8080"]
         ports = ["http"]
       }
+
+      resources {
+        cpu    = 100
+        memory = 32
+      }
     }
   }
 }

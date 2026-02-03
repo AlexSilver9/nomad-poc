@@ -4,21 +4,20 @@ job "traefik-rewrite" {
 
   group "traefik" {
     network {
-      port "https" {
-        static = 443  # ALB targets this port on all instances
-      }
+      mode = "host"  # Required to bind to host port 443 and reach Envoy at 127.0.0.1:8080
     }
 
     task "traefik" {
       driver = "docker"
 
       config {
-        image = "traefik:v3.0"
-        ports = ["https"]
+        image        = "traefik:v3.0"
+        network_mode = "host"  # Bind directly to host network
 
         args = [
-          "--entrypoints.https.address=:443",
+          "--entrypoints.web.address=:443",
           "--providers.file.filename=/etc/traefik/dynamic.yaml",
+          "--log.level=DEBUG",  # Helpful for debugging
         ]
 
         volumes = [
@@ -30,15 +29,29 @@ job "traefik-rewrite" {
         data = <<EOF
 http:
   routers:
+    # Route: /download/* with regex rewrite (business-service host)
     download-rewrite:
       rule: "Host(`business-service`) && PathPrefix(`/download`)"
+      entryPoints:
+        - web
       middlewares:
         - download-to-query
       service: envoy-ingress
       priority: 10
 
-    passthrough:
+    # Route: business-service host passthrough
+    business-passthrough:
       rule: "Host(`business-service`)"
+      entryPoints:
+        - web
+      service: envoy-ingress
+      priority: 5
+
+    # Default: catch-all for any other traffic (e.g., Host: localhost)
+    default-passthrough:
+      rule: "PathPrefix(`/`)"
+      entryPoints:
+        - web
       service: envoy-ingress
       priority: 1
 
@@ -52,7 +65,7 @@ http:
     envoy-ingress:
       loadBalancer:
         servers:
-          - url: "http://127.0.0.1:8080"  # Local Envoy ingress gateway
+          - url: "http://127.0.0.1:8080"
 EOF
         destination = "local/dynamic.yaml"
       }

@@ -160,36 +160,46 @@ For service mesh capabilities, install Consul before Nomad:
 
 7. Test the routing
 
-   Check Traefik (external entry point):
-   ```shell
-   curl -v http://localhost:443/
-   ```
-
    Check Ingress-Gateway (internal, after Traefik):
    ```shell
-   curl -v http://localhost:8080/
+   curl http://localhost:8080/
+   # Expected: "hello world" (web-service)
+   ```
+
+   Test Traefik → Envoy → web-service (default):
+   ```shell
+   curl http://localhost:443/
+   # Expected: "hello world" (web-service)
+   ```
+
+   Test Traefik → Envoy → business-service (specific host):
+   ```shell
+   curl -H "Host: business-service" http://localhost:443/
+   # Expected: whoami output with "Name: business-service" and "GET /"
    ```
 
    Test business-service routing (requires Host header):
    ```shell
    # Default route → business-service
    curl -H "Host: business-service" http://localhost:8080/
-   # Expected: "business-service: OK"
+   # Expected: whoami output with "Name: business-service"
 
    # Legacy API route → business-service-api
    curl -H "Host: business-service" http://localhost:8080/legacy-business-service/test
-   # Expected: "business-service-api: OK"
+   # Expected: whoami output with "Name: business-service-api" and "GET /legacy-business-service/test"
 
-   # Download route (via Traefik rewrite)
-   curl -H "Host: business-service.mitel.com" http://localhost:443/download/mytoken123
-   # Expected: Rewritten to /business-service/download.xhtml?token=mytoken123
+   # Download route (via Traefik rewrite) - verifies URL rewriting works
+   curl -H "Host: business-service" http://localhost:443/download/mytoken123
+   # Expected: whoami output showing the rewritten path:
+   #   Name: business-service
+   #   GET /business-service/download.xhtml?token=mytoken123
    ```
 
 ## AWS Application Load Balancer
 
 Create an ALB to route external traffic to Traefik:
 
-1. Create a target group (registers all running instances on port 443 for Traefik):
+1. Return to shell for setup and create a target group (registers all running instances on port 443 for Traefik):
    ```shell
    ./create_target_group.sh nomad-target-group
    ```

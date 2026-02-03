@@ -12,10 +12,8 @@ Listeners = [
     Port     = 8080
     Protocol = "http"
     Services = [
-      {
-        Name  = "web-service"
-        Hosts = ["*"]
-      },
+      # IMPORTANT: More specific hosts must come before wildcards
+      # business-service handles Host: business-service
       {
         Name  = "business-service"
         Hosts = ["business-service"]
@@ -25,12 +23,16 @@ Listeners = [
         # Configure it if business-service has protocol-aware logic, e.g.:
         # - Generates URLs (links, redirects)
         # - Sets secure cookies
-        #
-        # RequestHeaders = {
-        #  Add = {
-        #    "X-Forwarded-Proto" = "https"
-        #  }
-        #}        
+        RequestHeaders = {
+          Add = {
+            "X-Forwarded-Proto" = "https"
+          }
+        } 
+      },
+      # web-service handles everything else (Host: localhost, Host: *, etc.)
+      {
+        Name  = "web-service"
+        Hosts = ["*"]
       }
     ]
   }

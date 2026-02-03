@@ -48,14 +48,14 @@ job "business-service" {
       driver = "docker"
 
       config {
-        image = "hashicorp/http-echo"
-        args  = ["-text=business-service: OK", "-listen=:8080"]
+        image = "containous/whoami"
+        args  = ["--port=8080", "--name=business-service"]
         ports = ["http"]
       }
 
       resources {
         cpu    = 100
-        memory = 64
+        memory = 32
       }
     }
   }
@@ -96,14 +96,14 @@ job "business-service" {
       driver = "docker"
 
       config {
-        image = "hashicorp/http-echo"
-        args  = ["-text=business-service-api: OK", "-listen=:8080"]
+        image = "containous/whoami"
+        args  = ["--port=8080", "--name=business-service-api"]
         ports = ["http"]
       }
 
       resources {
         cpu    = 100
-        memory = 64
+        memory = 32
       }
     }
   }

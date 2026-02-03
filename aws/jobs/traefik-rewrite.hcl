@@ -57,9 +57,11 @@ http:
 
   middlewares:
     download-to-query:
-      replacePathRegex:
+      # Use redirectRegex to properly handle query string since replacePathRegex URL-encodes the '?' query delimiter
+      redirectRegex:
         regex: "^/download/(.*)$"
         replacement: "/business-service/download.xhtml?token=$1"
+        permanent: false
 
   services:
     envoy-ingress:

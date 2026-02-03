@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Create an EC2 target group for the Nomad ingress gateway.
-# Registers all running EC2 instances as targets on port 8080.
+# Registers all running EC2 instances as targets on port 443.
 # Requires: aws-cli, jq
 # Usage: ./create_target_group.sh [target-group-name]
 
@@ -12,7 +12,7 @@ command -v jq &>/dev/null || { echo "Error: jq required"; exit 1; }
 
 # Configuration
 TARGET_GROUP_NAME="${1:-nomad-target-group}"
-TARGET_PORT=8080
+TARGET_PORT=443
 VPC_ID="vpc-ec926686"
 
 echo "Creating target group: ${TARGET_GROUP_NAME}"

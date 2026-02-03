@@ -1,57 +1,63 @@
 # AWS Nomad Cluster
 
-Deploy a Nomad cluster on AWS EC2 instances.
+How to deploy a full featured Nomad cluster on AWS EC2 instances.
 
-## Quick Install
 
-SSH into an EC2 instance and run:
+## Architecture
 
-```shell
-curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/setup_nomad_aws_ami.sh | sh
+```
+AWS ALB:443 → Traefik:443 (URL Rewrite) → Consul Envoy:8080 (Ingress) → Sidecars → Services
 ```
 
-This installs the Nomad agent in both server and client mode, along with Docker.
+- **Traefik**: Handles regex URL rewrites (e.g., `/download/123` → `/business-service/download.xhtml?token=123`)
+- **Envoy Ingress Gateway**: Consul Connect ingress, routes to mesh services
+- **Envoy Sidecars**: mTLS between services
+
 
 ## Scripts
 
-| Script | Description |
-|--------|-------------|
-| `create_instances.sh` | Create 3 EC2 instances (nomad1, nomad2, nomad3) |
-| `describe_running_instances.sh` | List all instances with IPs and network info |
-| `terminate_instances.sh` | Terminate ALL EC2 instances (use with caution) |
-| `get_public_dns_names.sh` | Output public DNS names (one per line) |
-| `setup_consul_aws_ami.sh` | Install Consul on Amazon Linux |
-| `setup_nomad_aws_ami.sh` | Install Nomad + Docker on Amazon Linux |
-| `create_target_group.sh` | Create ALB target group for ingress gateway |
-| `create_alb.sh` | Create Application Load Balancer |
-| `delete_target_group.sh` | Delete target group(s) |
-| `delete_alb.sh` | Delete ALB(s) |
+| Script                            | Run in/on    | Description                                      |
+|-----------------------------------|--------------|--------------------------------------------------|
+| `create_instances.sh`             | Setup Shell  | Create 3 EC2 instances (nomad1, nomad2, nomad3)  |
+| `describe_running_instances.sh`   | Setup Shell  | List all instances with IPs and network info     |
+| `terminate_instances.sh`          | Setup Shell  | Terminate ALL EC2 instances                      |
+| `get_public_dns_names.sh`         | Setup Shell  | Print public DNS names (one per line)            |
+| `create_target_group.sh`          | Setup Shell  | Create ALB target group for ingress gateway      |
+| `create_alb.sh`                   | Setup Shell  | Create Application Load Balancer                 |
+| `delete_target_group.sh`          | Setup Shell  | Delete target group(s)                           |
+| `delete_alb.sh`                   | Setup Shell  | Delete ALB(s)                                    |
+| `setup_consul_aws_ami.sh`         | EC2 Instance | Install Consul on Amazon Linux                   |
+| `setup_nomad_aws_ami.sh`          | EC2 Instance | Install Nomad + Docker on Amazon Linux           |
 
 
 ## Setup Workflow
 
-Lifecycle Overview:
-1. Create instances and get public DNS names
-2. Setup Consul in AWS EC2 instances
-3. Setup Nomad in AWS EC2 instances
-4. Download Nomad jobs & service-defaults & ingress-intentions
-5. Configure Consul for HTTP Web-Service service-defaults & ingress-intentions
-6. Run Ingress-Gateway job
-7. Run Web-Service job
-8. Create AWS target group
-9. Create AWS load balancer
-10. Terminate AWS EC2 intances
-11. Delete AWS target group
-12. Delete AWS load balancer
+Lifecycle:
+
+| Action | Run in/on         | Description                                                               |
+|--------|-------------------|---------------------------------------------------------------------------|
+| 1.     | Setup Shell       | Create instances and get public DNS names                                 |
+| 2.     | All EC2 Instances | Setup Consul                                                              |
+| 3.     | All EC2 Instances | Setup Nomad                                                               |
+| 4.     | All EC2 Instances | Download Nomad jobs & Consul config entries                               |
+| 5.     | Any EC2 Instance  | Configure Consul (service-defaults, router, ingress-gateway, intentions)  |
+| 6.     | Any EC2 Instance  | Run Traefik-Rewrite job                                                   |
+| 7.     | Any EC2 Instance  | Run Ingress-Gateway job                                                   |
+| 8.     | Any EC2 Instance  | Run Web-Service job                                                       |
+| 9.     | Setup Shell       | Create AWS target group (port 443 for Traefik)                            |
+| 10.    | Setup Shell       | Create AWS load balancer                                                  |
+| 11.    | Setup Shell       | Terminate AWS EC2 instances                                               |
+| 12.    | Setup Shell       | Delete AWS load balancer                                                  |
+| 13.    | Setup Shell       | Delete AWS target group                                                   |
 
 ### Create AWS EC2 instances
 
-1. Go to bin dir:
+1. Open a shell for setup and go to bin dir:
    ```shell
    cd ./bin
    ```
 
-2. Create instances:
+2. Create EC2 instances:
    ```shell
    ./create_instances.sh
    ```
@@ -96,53 +102,94 @@ For service mesh capabilities, install Consul before Nomad:
    nomad node status -self -verbose | grep consul
    ```
 
-## Ingress-Gateway & Web-Service 
+## Ingress-Gateway & Web-Service
 
 1. SSH into any instance and download the Nomad job definitions and Consul config entries
    ```shell
+   # Nomad jobs
+   wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/traefik-rewrite.hcl
    wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/ingress-gateway.hcl
+   wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/web-service.hcl
+   wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/business-service.hcl
+
+   # Consul config entries
    wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/ingress-gateway-config.hcl
    wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/web-service-defaults.hcl
-   wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/web-service.hcl
    wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/ingress-intentions.hcl
+   wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/business-service-defaults.hcl
+   wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/business-service-api-defaults.hcl
+   wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/business-service-router.hcl
    ```
 
-2. Configure Consul config entries (service-defaults, ingress-gateway, intentions)
+2. Configure Consul config entries (service-defaults, ingress-gateway, intentions, router)
    ```shell
    consul config write web-service-defaults.hcl
+   consul config write business-service-defaults.hcl
+   consul config write business-service-api-defaults.hcl
+   consul config write business-service-router.hcl
    consul config write ingress-gateway-config.hcl
    consul config write ingress-intentions.hcl
+
    # Verify:
    consul config read -kind service-defaults -name web-service
+   consul config read -kind service-defaults -name business-service
+   consul config read -kind service-router -name business-service
    consul config read -kind ingress-gateway -name ingress-gateway
    consul config read -kind service-intentions -name web-service
    ```
 
-3. Start the Ingress-Gateway
+3. Start the Traefik URL rewrite layer (runs on all nodes)
+   ```shell
+   nomad job run traefik-rewrite.hcl
+   ```
+
+4. Start the Ingress-Gateway (runs on all nodes)
    ```shell
    nomad job run ingress-gateway.hcl
    ```
 
-4. Start the Web-Service
+5. Start the Web-Service
    ```shell
    nomad job run web-service.hcl
    ```
 
-5. Check Ingress-Gateway
+6. Start the Business-Service (deploys both business-service and business-service-api)
+   ```shell
+   nomad job run business-service.hcl
+   ```
+
+7. Test the routing
+
+   Check Traefik (external entry point):
+   ```shell
+   curl -v http://localhost:443/
+   ```
+
+   Check Ingress-Gateway (internal, after Traefik):
    ```shell
    curl -v http://localhost:8080/
    ```
 
-6. Check if web-service sidecar accepts connections on its proxy port:
+   Test business-service routing (requires Host header):
    ```shell
-   curl -v http://172.31.16.188:31337/
+   # Default route → business-service
+   curl -H "Host: business-service" http://localhost:8080/
+   # Expected: "business-service: OK"
+
+   # Legacy API route → business-service-api
+   curl -H "Host: business-service" http://localhost:8080/legacy-business-service/test
+   # Expected: "business-service-api: OK"
+
+   # Download route (via Traefik rewrite)
+   curl -H "Host: business-service.mitel.com" http://localhost:443/download/mytoken123
+   # Expected: Rewritten to /business-service/download.xhtml?token=mytoken123
    ```
 
 ## AWS Application Load Balancer
 
-Create an ALB to route external traffic to the ingress gateway:
+Create an ALB to route external traffic to Traefik:
 
-1. Create a target group (registers all running instances on port 8080):
+1. Create a target group (registers all running instances on port 443 for Traefik):
    ```shell
    ./create_target_group.sh nomad-target-group
    ```
@@ -166,7 +213,7 @@ Create an ALB to route external traffic to the ingress gateway:
 
 ## Requirements
 
-- AWS CLI configured with appropriate credentials
+- AWS CLI configured with appropriate credentials (`aws login`)
 - `jq` for JSON parsing
 - EC2 key pair named `nomad-keypair`
 

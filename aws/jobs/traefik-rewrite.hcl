@@ -58,9 +58,10 @@ http:
   middlewares:
     download-to-query:
       # Use redirectRegex to properly handle query string since replacePathRegex URL-encodes the '?' query delimiter
+      # Note: redirectRegex matches the FULL URL (scheme://host/path), not just the path
       redirectRegex:
-        regex: "^/download/(.*)$"
-        replacement: "/business-service/download.xhtml?token=$1"
+        regex: "^https?://[^/]+/download/(.*)$"
+        replacement: "/business-service/download.xhtml?token=${1}"
         permanent: false
 
   services:

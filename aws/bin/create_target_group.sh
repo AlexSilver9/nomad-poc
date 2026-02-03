@@ -12,7 +12,7 @@ command -v jq &>/dev/null || { echo "Error: jq required"; exit 1; }
 
 # Configuration
 TARGET_GROUP_NAME="${1:-nomad-target-group}"
-TARGET_PORT=443
+TARGET_PORT=8081
 VPC_ID="vpc-ec926686"
 
 echo "Creating target group: ${TARGET_GROUP_NAME}"

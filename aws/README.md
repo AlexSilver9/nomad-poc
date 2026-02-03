@@ -108,6 +108,7 @@ For service mesh capabilities, install Consul before Nomad:
    ```shell
    # Nomad jobs
    wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/traefik-rewrite.hcl
+   wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/nginx-rewrite.hcl # optional for nginx instead Traefik
    wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/ingress-gateway.hcl
    wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/web-service.hcl
    wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/business-service.hcl
@@ -196,7 +197,7 @@ For service mesh capabilities, install Consul before Nomad:
    curl -L -H "Host: business-service" http://localhost:8081/download/mytoken123
    # Expected: whoami output showing the rewritten path:
    #   Name: business-service
-   #   GET /business-service/download.xhtml?token=mytoken123
+   #   GET /business-service/download.xhtml?token=mytoken123 ...
    ```
 
 ## AWS Application Load Balancer
@@ -221,7 +222,26 @@ Create an ALB to route external traffic to Traefik:
 
 4. Test the ALB (after targets become healthy):
    ```shell
-   curl http://<alb-dns-name>/
+   # Get ALB DNS name
+   alb_dns=$(aws elbv2 describe-load-balancers --names nomad-alb --query 'LoadBalancers[0].DNSName' --output text)
+
+   # Default route → web-service
+   curl http://$alb_dns/
+   # Expected: "hello world"
+
+   # business-service (specific host)
+   curl -sH "Host: business-service" http://$alb_dns/ | grep Name
+   # Expected: "Name: business-service"
+
+   # Legacy API route → business-service-api
+   curl -sH "Host: business-service" http://$alb_dns/legacy-business-service/test | grep Name
+   # Expected: "Name: business-service-api"
+
+   # Download route (via Traefik regex rewrite)
+   curl -L -sH "Host: business-service" http://$alb_dns/download/mytoken123 | grep -E "(Name|GET)"
+   # Expected:
+   #   Name: business-service
+   #   GET /business-service/download.xhtml?token=mytoken123 ...
    ```
 
 

@@ -152,7 +152,7 @@ Ein `Revoke` invalidiert ein Secret und verhindert weitere `Renew`s.
 
 ```shell
 vault lease revoke
-vault lease revoke -prefix mitel/ # Prefix basierter Revoke
+vault lease revoke -prefix my_company/ # Prefix basierter Revoke, e.g. `my_company`
 # oder per UI
 ```
 

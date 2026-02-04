@@ -33,15 +33,15 @@ job "rolling-upgrade-job" {
 
       check {
         type     = "http"
-        path     = "/health"
-        interval = "5s"
+        path     = "/"
+        interval = "10s"
         timeout  = "2s"
       }
 
       connect {
         sidecar_service {
           proxy {
-            local_service_port = 80
+            local_service_port = 8080
           }
         }
       }
@@ -53,6 +53,7 @@ job "rolling-upgrade-job" {
       config {
         #image = "traefik/whoami:v1.11.0"  # new image version
         image = "traefik/whoami:v1.10.0"  # old image version
+        args  = ["-text=hello world", "-listen=:8080"]
         ports = ["http"]
       }
 

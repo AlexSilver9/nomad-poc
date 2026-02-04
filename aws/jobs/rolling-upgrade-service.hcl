@@ -22,8 +22,9 @@ job "rolling-upgrade-job" {
 
     network {
       mode = "bridge"
+
       port "http" {
-        to = 80
+        to = 8080
       }
     }
 
@@ -53,7 +54,7 @@ job "rolling-upgrade-job" {
       config {
         #image = "traefik/whoami:v1.11.0"  # new image version
         image = "traefik/whoami:v1.10.0"  # old image version
-        args  = ["-text=hello world", "-listen=:8080"]
+        args  = ["--port=8080", "--name=rolling-upgrade"]
         ports = ["http"]
       }
 

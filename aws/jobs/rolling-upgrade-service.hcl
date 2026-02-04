@@ -10,10 +10,11 @@ job "rolling-upgrade-job" {
   # On job level it is inherited by all task groups in the job.
   # Can be overriden by task (merge with task level precedence precedence over job leve)
   update {
-    max_parallel     = 1      # number of allocations changing / deployments at a time
-    min_healthy_time = "10s"  # require healthy state before deploy more versions of the new group
-    healthy_deadline = "10m"
-    auto_revert      = true   # rollback on failed deployments, otherwise deployment fails and no further placing happens
+    max_parallel      = 1     # Number of allocs changing / deployments at a time
+    min_healthy_time  = "10s" # Min duration an alloc must remain healthy before spawning next allocs
+    healthy_deadline  = "1m"  # Time for a single alloc to become healthy, must be < progress_deadline
+    progress_deadline = "5m"  # Overall deadline for deployment progress
+    auto_revert       = true  # Rollback on failed deployments, otherwise deployment fails and no further placing happens
   }
 
   group "rolling-upgrade-group" {

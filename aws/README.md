@@ -18,6 +18,7 @@ AWS ALB:443 → Traefik:8081 (URL Rewrite) → Consul Envoy:8080 (Ingress) → S
 
 | Script                            | Run in/on    | Description                                      |
 |-----------------------------------|--------------|--------------------------------------------------|
+| `setup_cluster.sh`                | Setup Shell  | **Full automated setup** (creates instances, installs Consul/Nomad, configures services, creates ALB) |
 | `create_instances.sh`             | Setup Shell  | Create 3 EC2 instances (nomad1, nomad2, nomad3)  |
 | `describe_running_instances.sh`   | Setup Shell  | List all instances with IPs and network info     |
 | `terminate_instances.sh`          | Setup Shell  | Terminate ALL EC2 instances                      |
@@ -30,7 +31,34 @@ AWS ALB:443 → Traefik:8081 (URL Rewrite) → Consul Envoy:8080 (Ingress) → S
 | `setup_nomad_aws_ami.sh`          | EC2 Instance | Install Nomad + Docker on Amazon Linux           |
 
 
-## Setup Workflow
+## Quick Start (Automated)
+
+Run the full cluster setup with a single command:
+
+```shell
+cd ./bin
+./setup_cluster.sh
+```
+
+This script automates the entire setup workflow:
+1. Creates 3 EC2 instances (nomad1, nomad2, nomad3)
+2. Waits for instances to be accessible via SSH
+3. Installs Consul on all nodes and forms the cluster
+4. Installs Nomad on all nodes and forms the cluster
+5. Configures Consul service mesh (service-defaults, router, ingress-gateway, intentions)
+6. Runs Nomad jobs (Traefik, ingress-gateway, web-service, business-service)
+7. Tests internal routing
+8. Creates AWS target group and Application Load Balancer
+9. Waits for targets to be healthy and tests ALB endpoints
+
+At the end, you'll get the ALB DNS name, UI links, ssh commands and test commands.
+
+**Requirements:**
+- SSH key at `~/workspace/nomad/nomad-keypair.pem` (or set `SSH_KEY` env var)
+- AWS CLI configured with appropriate credentials
+
+
+## Setup Workflow (Manual)
 
 Lifecycle:
 

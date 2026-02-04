@@ -129,16 +129,33 @@ wait_for_instances() {
 # STEP 3: Install Consul on all nodes
 #------------------------------------------------------------------------------
 install_consul() {
-    log_info "=== STEP 3: Installing Consul on all nodes ==="
+    log_info "=== STEP 3: Installing Consul on all nodes (parallel) ==="
 
     # Build node arguments for setup script
     local node_args="${NODES[*]}"
+    local pids=()
 
     for node in "${NODES[@]}"; do
-        log_info "Installing Consul on $node..."
-        ssh_run "$node" "curl --proto '=https' --tlsv1.2 -sSf $GITHUB_RAW_BASE/bin/setup_consul_aws_ami.sh | bash -s -- $node_args"
-        log_success "Consul installed on $node"
+        log_info "Starting Consul install on $node..."
+        ssh_run "$node" "curl --proto '=https' --tlsv1.2 -sSf $GITHUB_RAW_BASE/bin/setup_consul_aws_ami.sh | bash -s -- $node_args" &
+        pids+=($!)
     done
+
+    # Wait for all parallel installs to complete
+    local failed=0
+    for i in "${!pids[@]}"; do
+        if wait "${pids[$i]}"; then
+            log_success "Consul installed on ${NODES[$i]}"
+        else
+            log_error "Consul install failed on ${NODES[$i]}"
+            ((failed++))
+        fi
+    done
+
+    if [[ $failed -gt 0 ]]; then
+        log_error "$failed node(s) failed Consul installation"
+        exit 1
+    fi
 
     # Verify cluster formation with retry loop
     log_info "Waiting for Consul cluster to form..."
@@ -166,17 +183,34 @@ install_consul() {
 # STEP 4: Install Nomad on all nodes
 #------------------------------------------------------------------------------
 install_nomad() {
-    log_info "=== STEP 4: Installing Nomad on all nodes ==="
+    log_info "=== STEP 4: Installing Nomad on all nodes (parallel) ==="
 
     # Build node arguments for setup script
     local node_args="${NODES[*]}"
+    local pids=()
 
     for node in "${NODES[@]}"; do
-        log_info "Installing Nomad on $node..."
+        log_info "Starting Nomad install on $node..."
         # Using ADD_USER_TO_DOCKER=yes for non-interactive mode
-        ssh_run "$node" "export ADD_USER_TO_DOCKER=yes && curl --proto '=https' --tlsv1.2 -sSf $GITHUB_RAW_BASE/bin/setup_nomad_aws_ami.sh | bash -s -- $node_args"
-        log_success "Nomad installed on $node"
+        ssh_run "$node" "export ADD_USER_TO_DOCKER=yes && curl --proto '=https' --tlsv1.2 -sSf $GITHUB_RAW_BASE/bin/setup_nomad_aws_ami.sh | bash -s -- $node_args" &
+        pids+=($!)
     done
+
+    # Wait for all parallel installs to complete
+    local failed=0
+    for i in "${!pids[@]}"; do
+        if wait "${pids[$i]}"; then
+            log_success "Nomad installed on ${NODES[$i]}"
+        else
+            log_error "Nomad install failed on ${NODES[$i]}"
+            ((failed++))
+        fi
+    done
+
+    if [[ $failed -gt 0 ]]; then
+        log_error "$failed node(s) failed Nomad installation"
+        exit 1
+    fi
 
     # Verify cluster formation with retry loop
     log_info "Waiting for Nomad cluster to form..."
@@ -219,13 +253,17 @@ configure_consul() {
         ingress-intentions.hcl
     )
     for file in "${consul_files[@]}"; do
-        ssh_run "$first_node" "wget -q $GITHUB_RAW_BASE/jobs/$file"
+        ssh_run "$first_node" "wget -q -O $file $GITHUB_RAW_BASE/jobs/$file"
     done
 
     # Apply Consul configurations
     log_info "Applying Consul config entries..."
     for file in "${consul_files[@]}"; do
-        ssh_run "$first_node" "consul config write $file"
+        log_info "Writing $file..."
+        if ! ssh_run "$first_node" "consul config write $file"; then
+            log_error "Failed to write $file"
+            exit 1
+        fi
     done
 
     log_success "Consul configurations applied"
@@ -233,7 +271,21 @@ configure_consul() {
     # Verify
     log_info "Verifying Consul configurations..."
     ssh_run "$first_node" "consul config read -kind service-defaults -name web-service" || log_warn "web-service defaults not found"
-    ssh_run "$first_node" "consul config read -kind ingress-gateway -name ingress-gateway" || log_warn "ingress-gateway config not found"
+
+    # Verify ingress gateway has business-service configured
+    local ingress_config
+    ingress_config=$(ssh_run "$first_node" "consul config read -kind ingress-gateway -name ingress-gateway" 2>/dev/null || echo "")
+    if [[ -z "$ingress_config" ]]; then
+        log_error "ingress-gateway config not found"
+        exit 1
+    fi
+    if ! echo "$ingress_config" | grep -q "business-service"; then
+        log_error "ingress-gateway config is missing business-service!"
+        log_error "Config content:"
+        echo "$ingress_config"
+        exit 1
+    fi
+    log_success "ingress-gateway config verified (includes business-service)"
 }
 
 #------------------------------------------------------------------------------
@@ -255,7 +307,7 @@ run_nomad_jobs() {
     # Download Nomad job files from GitHub
     log_info "Downloading Nomad job files to $first_node..."
     for file in "${nomad_jobs[@]}"; do
-        ssh_run "$first_node" "wget -q $GITHUB_RAW_BASE/jobs/$file"
+        ssh_run "$first_node" "wget -q -O $file $GITHUB_RAW_BASE/jobs/$file"
     done
 
     # Run jobs in order

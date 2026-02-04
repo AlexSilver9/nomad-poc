@@ -142,7 +142,6 @@ For service mesh capabilities, install Consul before Nomad:
    wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/business-service.hcl
 
    # Consul config entries
-   wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/ingress-gateway-config.hcl
    wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/web-service-defaults.hcl
    wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/ingress-intentions.hcl
    wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/business-service-defaults.hcl
@@ -150,21 +149,20 @@ For service mesh capabilities, install Consul before Nomad:
    wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/business-service-router.hcl
    ```
 
-2. Configure Consul config entries (service-defaults, ingress-gateway, intentions, router)
+2. Configure Consul config entries (service-defaults, intentions, router)
    ```shell
    consul config write web-service-defaults.hcl
    consul config write business-service-defaults.hcl
    consul config write business-service-api-defaults.hcl
    consul config write business-service-router.hcl
-   consul config write ingress-gateway-config.hcl
    consul config write ingress-intentions.hcl
 
    # Verify:
    consul config read -kind service-defaults -name web-service
    consul config read -kind service-defaults -name business-service
    consul config read -kind service-router -name business-service
-   consul config read -kind ingress-gateway -name ingress-gateway
    consul config read -kind service-intentions -name web-service
+   # Note: ingress-gateway config is created when the Nomad job runs
    ```
 
 3. Start the Traefik URL rewrite layer (runs on all nodes)

@@ -278,13 +278,13 @@ Konkreter Vergleich: nginx vs Consul Ingress Gateway
    └───────────────┘       └───────────────┘       └───────────────┘
 ```
 
+
 ## Files involved in routing
 
 | File	                      | Responsibility                                      |
 |-----------------------------|-----------------------------------------------------|
 | traefik-rewrite.hcl	        | URL regex rewrite, forwards to Envoy                |
-| ingress-gateway.hcl	        | Nomad job for Envoy ingress on :8080                |
-| ingress-gateway-config.hcl	| Consul config: host → service mapping               |
+| ingress-gateway.hcl	        | Nomad job for Envoy ingress on :8080 (includes host → service mapping) |
 | business-service-router.hcl | Consul config: path-based routing (/swdlgwapi vs /) |
 
 

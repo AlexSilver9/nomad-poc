@@ -12,9 +12,13 @@ aws/
     ├── business-service.hcl        # Nomad job
     ├── business-service-defaults.hcl
     ├── ingress-gateway.hcl         # Nomad job
-    ├── ingress-gateway-config.hcl  # Consul config entry
+    ├── ingress-intentions.hcl      # Consul config entry
     └── ...
 ```
+
+> **Note:** Ingress gateway routing is defined directly in the Nomad job (`ingress-gateway.hcl`)
+> rather than a separate Consul config entry. This avoids conflicts where Nomad would overwrite
+> the Consul config on job deployment.
 
 ---
 
@@ -31,7 +35,6 @@ aws/
 │       ├── business-service-defaults.hcl
 │       ├── business-service-api-defaults.hcl
 │       ├── business-service-router.hcl
-│       ├── ingress-gateway-config.hcl
 │       └── ingress-intentions.hcl
 └── nomad/
     └── jobs/                       # Nomad job specifications
@@ -71,8 +74,7 @@ aws/
 ├── bin/                            # Scripts
 ├── infrastructure/                 # Platform/infrastructure components
 │   ├── ingress-gateway/
-│   │   ├── job.nomad.hcl           # Nomad job
-│   │   ├── config.consul.hcl       # Consul ingress-gateway config
+│   │   ├── job.nomad.hcl           # Nomad job (includes ingress routing config)
 │   │   └── intentions.consul.hcl   # Consul intentions
 │   ├── traefik-rewrite/
 │   |   └── job.nomad.hcl           # Nomad job (no Consul config needed)
@@ -90,11 +92,12 @@ aws/
         └── defaults.consul.hcl     # Consul service-defaults (no separate job, deployed with business-service)
 ```
 
+> **Note:** Ingress gateway routing is defined in the Nomad job itself, not a separate Consul config file.
+
 ### File Naming Convention
 - `job.nomad.hcl` - Nomad job specification
 - `defaults.consul.hcl` - Consul service-defaults config entry
 - `router.consul.hcl` - Consul service-router config entry
-- `config.consul.hcl` - Consul gateway configuration
 - `intentions.consul.hcl` - Consul service intentions
 
 ### Pros

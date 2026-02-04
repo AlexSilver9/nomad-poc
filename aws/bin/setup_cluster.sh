@@ -414,7 +414,7 @@ wait_and_test_alb() {
 
     TARGET_GROUP_ARN=$(aws elbv2 describe-target-groups --names "$TARGET_GROUP_NAME" --query 'TargetGroups[0].TargetGroupArn' --output text)
 
-    local max_attempts=150
+    local max_attempts=75
     local attempt=1
 
     while [[ $attempt -le $max_attempts ]]; do
@@ -428,7 +428,7 @@ wait_and_test_alb() {
         fi
 
         log_info "Attempt $attempt/$max_attempts: Waiting for targets... ($health)"
-        sleep 2
+        sleep 4
         ((attempt++))
     done
 

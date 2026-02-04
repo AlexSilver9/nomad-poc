@@ -243,13 +243,14 @@ configure_consul() {
     local first_node="${NODES[0]}"
 
     # Download Consul config files to first node from GitHub
+    # Note: ingress-gateway routing is defined in the Nomad job (ingress-gateway.hcl),
+    # not in a separate Consul config entry, to avoid conflicts
     log_info "Downloading Consul config files to $first_node..."
     local consul_files=(
         web-service-defaults.hcl
         business-service-defaults.hcl
         business-service-api-defaults.hcl
         business-service-router.hcl
-        ingress-gateway-config.hcl
         ingress-intentions.hcl
     )
     for file in "${consul_files[@]}"; do
@@ -271,21 +272,9 @@ configure_consul() {
     # Verify
     log_info "Verifying Consul configurations..."
     ssh_run "$first_node" "consul config read -kind service-defaults -name web-service" || log_warn "web-service defaults not found"
-
-    # Verify ingress gateway has business-service configured
-    local ingress_config
-    ingress_config=$(ssh_run "$first_node" "consul config read -kind ingress-gateway -name ingress-gateway" 2>/dev/null || echo "")
-    if [[ -z "$ingress_config" ]]; then
-        log_error "ingress-gateway config not found"
-        exit 1
-    fi
-    if ! echo "$ingress_config" | grep -q "business-service"; then
-        log_error "ingress-gateway config is missing business-service!"
-        log_error "Config content:"
-        echo "$ingress_config"
-        exit 1
-    fi
-    log_success "ingress-gateway config verified (includes business-service)"
+    ssh_run "$first_node" "consul config read -kind service-defaults -name business-service" || log_warn "business-service defaults not found"
+    log_success "Consul service configurations verified"
+    # Note: ingress-gateway config is created when the Nomad job runs (Step 6)
 }
 
 #------------------------------------------------------------------------------
@@ -321,6 +310,22 @@ run_nomad_jobs() {
     # Verify jobs
     log_info "Checking job status..."
     ssh_run "$first_node" "nomad status"
+
+    # Verify ingress gateway config was created by Nomad job
+    log_info "Verifying ingress-gateway configuration..."
+    local ingress_config
+    ingress_config=$(ssh_run "$first_node" "consul config read -kind ingress-gateway -name ingress-gateway" 2>/dev/null || echo "")
+    if [[ -z "$ingress_config" ]]; then
+        log_error "ingress-gateway config not found after running Nomad job"
+        exit 1
+    fi
+    if ! echo "$ingress_config" | grep -q "business-service"; then
+        log_error "ingress-gateway config is missing business-service!"
+        log_error "Config content:"
+        echo "$ingress_config"
+        exit 1
+    fi
+    log_success "ingress-gateway config verified (includes business-service)"
 
     log_success "Nomad jobs started"
 }

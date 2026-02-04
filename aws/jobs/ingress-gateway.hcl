@@ -23,9 +23,23 @@ job "ingress-gateway" {
         gateway {
           proxy {}
 
-          # Ingress routing is defined in Consul config entry (ingress-gateway-config.hcl)
-          # Do NOT define 'ingress' block here - it would overwrite the Consul config
-          ingress {}
+          ingress {
+            listener {
+              port     = 8080
+              protocol = "http"
+
+              # IMPORTANT: More specific hosts must come before wildcards
+              service {
+                name  = "business-service"
+                hosts = ["business-service"]
+              }
+
+              service {
+                name  = "web-service"
+                hosts = ["*"]
+              }
+            }
+          }
         }
       }
     }

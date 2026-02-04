@@ -4,26 +4,35 @@ set -euo pipefail
 # Install and configure HashiCorp Consul on Amazon Linux (AWS EC2).
 # Sets up Consul server+client and systemd service.
 # Run this BEFORE setup_nomad_aws_ami.sh for Nomad-Consul integration.
-# Usage local:
-#   echo -e "<host1>\n<host2>\n<host3>" | ./setup_consul_aws_ami.sh
-# Usage on EC2:
-#   ./get_public_dns_names.sh | ssh ec2-user@<host> 'bash -s' < ./setup_consul_aws_ami.sh
+# Usage with arguments (non-interactive):
+#   ./setup_consul_aws_ami.sh <node1> <node2> <node3>
+# Usage interactive:
+#   ./setup_consul_aws_ami.sh  (prompts for node addresses)
 # Usage from repo:
 #   curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/setup_consul_aws_ami.sh | sh
 
 # Variables
 CONSUL_SYSTEMD_CONFIG="/usr/lib/systemd/system/consul.service"
 
-# Read cluster node addresses (one per line, empty line to finish)
-echo "Enter cluster node addresses (one per line, empty line to finish):"
+# Read cluster node addresses from arguments or interactively
 nodes=()
-while IFS= read -r line </dev/tty; do
-  [[ -z "$line" ]] && break
-  nodes+=("$line")
-done
+
+if [[ $# -gt 0 ]]; then
+  # Non-interactive: nodes passed as arguments
+  nodes=("$@")
+else
+  # Interactive: read from tty
+  echo "Enter cluster node addresses (one per line, empty line to finish):"
+  while IFS= read -r line </dev/tty; do
+    [[ -z "$line" ]] && break
+    nodes+=("$line")
+  done
+fi
 
 if [[ ${#nodes[@]} -eq 0 ]]; then
   echo "Error: No node addresses provided"
+  echo "Usage: $0 <node1> <node2> <node3> ..."
+  echo "   or: $0  (interactive mode)"
   exit 1
 fi
 

@@ -3,27 +3,37 @@ set -euo pipefail
 
 # Install and configure Nomad on Amazon Linux (AWS EC2).
 # Sets up Nomad server+client, Docker driver, and systemd service.
-# Usage local:
-#   echo -e "<host1>\n<host2>\n<host3>" | ./setup_nomad_aws_ami.sh
-# Usage on EC2:
-#   ./get_public_dns_names.sh | ssh ec2-user@<host> 'bash -s' < ./setup_nomad_aws_ami.sh
+# Usage with arguments (non-interactive):
+#   ./setup_nomad_aws_ami.sh <node1> <node2> <node3>
+# Usage interactive:
+#   ./setup_nomad_aws_ami.sh  (prompts for node addresses)
 # Usage from repo:
 #   curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/setup_nomad_aws_ami.sh | sh
 
 # Variables
 NOMAD_SYSTEMD_CONFIG="/usr/lib/systemd/system/nomad.service"
 CNI_VERSION="v1.4.0"
+ADD_USER_TO_DOCKER="${ADD_USER_TO_DOCKER:-}"  # Set to "yes" for non-interactive mode
 
-# Read cluster node addresses (one per line, empty line to finish)
-echo "Enter cluster node addresses (one per line, empty line to finish):"
+# Read cluster node addresses from arguments or interactively
 nodes=()
-while IFS= read -r line </dev/tty; do
-  [[ -z "$line" ]] && break
-  nodes+=("$line")
-done
+
+if [[ $# -gt 0 ]]; then
+  # Non-interactive: nodes passed as arguments
+  nodes=("$@")
+else
+  # Interactive: read from tty
+  echo "Enter cluster node addresses (one per line, empty line to finish):"
+  while IFS= read -r line </dev/tty; do
+    [[ -z "$line" ]] && break
+    nodes+=("$line")
+  done
+fi
 
 if [[ ${#nodes[@]} -eq 0 ]]; then
-  echo "Error: No node addresses provided on stdin"
+  echo "Error: No node addresses provided"
+  echo "Usage: $0 <node1> <node2> <node3> ..."
+  echo "   or: $0  (interactive mode)"
   exit 1
 fi
 
@@ -185,10 +195,17 @@ echo "Starting Nomad daemon..."
 sudo systemctl enable --now nomad
 
 # Optional: Add current user to docker group
-if ask_user "Do you want to add the current user ${LOGNAME} to docker group in order to enable running docker commands without sudo?"; then
+add_to_docker=false
+if [[ "$ADD_USER_TO_DOCKER" == "yes" ]]; then
+  add_to_docker=true
+elif [[ -z "$ADD_USER_TO_DOCKER" ]] && ask_user "Do you want to add the current user ${LOGNAME} to docker group in order to enable running docker commands without sudo?"; then
+  add_to_docker=true
+fi
+
+if $add_to_docker; then
   echo "Adding ${LOGNAME} to docker group..."
   sudo usermod -aG docker "${LOGNAME}"
-  echo "Group added. For immediate effect run: `newgrp docker`"
+  echo "Group added. For immediate effect run: \`newgrp docker\`"
   echo "Or log out and back in."
 fi
 

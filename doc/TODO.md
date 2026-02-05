@@ -30,6 +30,7 @@
 - Failure Handling
 - health checks (https://developer.hashicorp.com/nomad/docs/job-specification/check)
 - Variables (aka Kubernetes ConfigMaps)
+- Job Parameters (aka Args) possible?
 - Nomad Actions (https://developer.hashicorp.com/nomad/docs/job-declare/nomad-actions)
 - Node Anti-Affinity
 - Indexed Containers (Container X, Y, Z run only on Node X)

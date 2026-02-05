@@ -256,6 +256,12 @@ Konkreter Vergleich: nginx vs Consul Ingress Gateway
 
 
 # URL REWRITE with TRAEFIK
+
+URL Reqrite mit Consul-Envoy derzeit nicht möglich:
+https://discuss.hashicorp.com/t/consul-ingress-controller-regex-rewrite/36855
+
+Alternativen: Traeffik oder Nginx
+
 ```text
                     ┌─────────────────────────────────────┐
                     │              AWS ALB                │

@@ -18,7 +18,7 @@ job "rolling-update-job" {
   }
 
   group "rolling-update-group" {
-    count = 1
+    count = 2
 
     network {
       mode = "bridge"

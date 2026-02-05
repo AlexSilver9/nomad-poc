@@ -464,6 +464,35 @@ wait_and_test_alb() {
 }
 
 #------------------------------------------------------------------------------
+# STEP 10: Download demo files (not run automatically)
+#------------------------------------------------------------------------------
+download_demo_files() {
+    log_info "=== STEP 10: Downloading demo files ==="
+
+    local first_node="${NODES[0]}"
+
+    # Additional job files for manual testing
+    local extra_jobs=(
+        rolling-update-service.hcl
+    )
+    log_info "Downloading additional job files to $first_node..."
+    for file in "${extra_jobs[@]}"; do
+        ssh_run "$first_node" "wget -q -O $file $GITHUB_RAW_BASE/jobs/$file"
+    done
+
+    # Shell scripts for manual testing
+    local scripts=(
+        rolling_update.sh
+    )
+    log_info "Downloading shell scripts to $first_node..."
+    for file in "${scripts[@]}"; do
+        ssh_run "$first_node" "wget -q -O $file $GITHUB_RAW_BASE/bin/$file && chmod +x $file"
+    done
+
+    log_success "Demo files downloaded"
+}
+
+#------------------------------------------------------------------------------
 # MAIN
 #------------------------------------------------------------------------------
 main() {
@@ -482,6 +511,7 @@ main() {
     test_internal_routing
     create_load_balancer
     wait_and_test_alb
+    download_demo_files
 
     echo ""
     echo "=============================================="

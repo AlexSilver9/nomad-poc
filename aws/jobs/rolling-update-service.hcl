@@ -17,7 +17,7 @@
 # To prevent automatic rollback e.g. for manually investigation of failed deployments, set auto_revert = false.
 # The deployment will fail but allocations won't be changed automatically.
 
-job "rolling-update-job" {
+job "rolling-update-service" {
 
   datacenters = ["dc1"]
   type        = "service"

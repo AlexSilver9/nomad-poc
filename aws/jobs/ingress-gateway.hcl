@@ -36,15 +36,7 @@ job "ingress-gateway" {
 
               service {
                 name  = "web-service"
-                hosts = ["web-service"]
-              }
-
-              # Wildcard: any service reachable via Host: <service-name>
-              # Requires service-defaults (protocol=http) and intentions
-              # to be configured before new services are deployed
-              service {
-                name = "*"
-                # hosts must be empty for wildcard - Consul auto-routes based on Host header
+                hosts = ["*"]
               }
             }
           }

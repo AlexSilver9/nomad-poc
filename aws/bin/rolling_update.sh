@@ -3,6 +3,9 @@ set -euo pipefail
 
 # Demonstrates a Rolling Update with traffic routing via ALB.
 #
+# This script updates the ingress gateway to include rolling-update-service,
+# runs the demo, then restores the original ingress gateway config.
+#
 # Each step pauses for verification in the Nomad UI before proceeding.
 #
 # Usage: ./rolling_update.sh
@@ -18,15 +21,22 @@ echo "=== STEP 1: Download required files ==="
 wget -q -O "$JOB_FILE" "$GITHUB_RAW_BASE/$JOB_FILE"
 wget -q -O rolling-update-service-defaults.hcl "$GITHUB_RAW_BASE/rolling-update-service-defaults.hcl"
 wget -q -O rolling-update-service-intentions.hcl "$GITHUB_RAW_BASE/rolling-update-service-intentions.hcl"
-echo "Downloaded job and Consul config files"
+wget -q -O ingress-gateway.hcl "$GITHUB_RAW_BASE/ingress-gateway.hcl"
+wget -q -O ingress-gateway-with-rolling-update.hcl "$GITHUB_RAW_BASE/ingress-gateway-with-rolling-update.hcl"
+echo "Downloaded job, Consul config, and ingress gateway files"
 
-read -p "Press Enter to apply Consul configurations..."
+read -p "Press Enter to apply Consul configurations and update ingress gateway..."
 
-# Step 2: Apply Consul configurations
+# Step 2: Apply Consul configurations and update ingress gateway
 echo "=== STEP 2: Apply Consul configurations ==="
 consul config write rolling-update-service-defaults.hcl
 consul config write rolling-update-service-intentions.hcl
 echo "Consul service-defaults and intentions applied"
+
+echo "=== Updating ingress gateway to include rolling-update-service ==="
+nomad job run ingress-gateway-with-rolling-update.hcl
+echo "Ingress gateway updated (waiting for Envoy to reload...)"
+sleep 5
 
 read -p "Press Enter to run the initial deployment..."
 
@@ -79,9 +89,14 @@ read -p "Press Enter to stop and purge the job..."
 echo "=== STEP 9: Stop and purge job ==="
 nomad job stop -purge "$JOB_NAME"
 
-# Cleanup Consul config entries
-echo "=== Cleanup: Remove Consul config entries ==="
+# Step 10: Cleanup
+echo "=== STEP 10: Cleanup ==="
+
+echo "Removing Consul config entries..."
 consul config delete -kind service-intentions -name "$JOB_NAME" || true
 consul config delete -kind service-defaults -name "$JOB_NAME" || true
+
+echo "Restoring original ingress gateway..."
+nomad job run ingress-gateway.hcl
 
 echo "Done"

@@ -6,7 +6,7 @@ job "ingress-gateway" {
 
   group "ingress" {
     network {
-      # Required for Consul Connect
+      # Required for Consul Connect via CNI bridge (required nomad running as root)
       mode = "bridge"
 
       port "inbound" {
@@ -35,12 +35,15 @@ job "ingress-gateway" {
               }
 
               service {
-                name  = "rolling-update-service"
-                hosts = ["rolling-update-service"]
+                name  = "web-service"
+                hosts = ["web-service"]
               }
 
+              # Wildcard: any service reachable via Host: <service-name>
+              # Requires service-defaults (protocol=http) and intentions
+              #  to be configured before new services are deployed
               service {
-                name  = "web-service"
+                name  = "*"
                 hosts = ["*"]
               }
             }

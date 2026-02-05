@@ -9,7 +9,7 @@ set -euo pipefail
 
 GITHUB_RAW_BASE="https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs"
 JOB_FILE="rolling-update-service.hcl"
-JOB_NAME="rolling-update-job"
+JOB_NAME="rolling-update-service"
 OLD_IMAGE="traefik/whoami:v1.10.0"
 NEW_IMAGE="traefik/whoami:v1.11.0"
 

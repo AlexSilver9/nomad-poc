@@ -143,7 +143,7 @@ For service mesh capabilities, install Consul before Nomad:
 
    # Consul config entries
    wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/web-service-defaults.hcl
-   wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/ingress-intentions.hcl
+   wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/web-service-intentions.hcl
    wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/business-service-defaults.hcl
    wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/business-service-api-defaults.hcl
    wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/business-service-router.hcl
@@ -155,7 +155,7 @@ For service mesh capabilities, install Consul before Nomad:
    consul config write business-service-defaults.hcl
    consul config write business-service-api-defaults.hcl
    consul config write business-service-router.hcl
-   consul config write ingress-intentions.hcl
+   consul config write web-service-intentions.hcl
 
    # Verify:
    consul config read -kind service-defaults -name web-service

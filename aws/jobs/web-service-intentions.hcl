@@ -1,5 +1,7 @@
 # Allow ingress-gateway to connect to web-service
-# `consul config write ingress-intentions.hcl`
+# https://developer.hashicorp.com/consul/docs/secure-mesh/intention
+
+# `consul config write web-service-intentions.hcl`
 
 Kind = "service-intentions"
 Name = "web-service"

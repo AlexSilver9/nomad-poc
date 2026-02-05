@@ -9,7 +9,7 @@ This guide explains where to configure different aspects of the Nomad/Consul ser
 | **Ingress Gateway routing** (hosts, services) | `aws/jobs/ingress-gateway.hcl` | Add/remove services exposed through the gateway |
 | **Service protocol** (http/tcp/grpc) | `aws/jobs/*-defaults.hcl` | When adding a new service to the mesh |
 | **Service-to-service routing** (path-based) | `aws/jobs/*-router.hcl` | Route different paths to different service subsets |
-| **Service authorization** (intentions) | `aws/jobs/ingress-intentions.hcl` | Allow/deny traffic between services |
+| **Service authorization** (intentions) | `aws/jobs/*-intentions.hcl` | Allow/deny which sources can send traffic to a service |
 | **URL rewrites** (regex transforms) | `aws/jobs/traefik-rewrite.hcl` | Complex URL transformations before hitting Envoy |
 | **Service deployment** (containers, resources) | `aws/jobs/*-service.hcl` | Deploy/update application containers |
 
@@ -81,23 +81,25 @@ Routes = [
 **Apply changes:** `consul config write business-service-router.hcl`
 
 
-### Intentions (`ingress-intentions.hcl`)
+### Intentions (`*-intentions.hcl`)
 
-Controls which services can communicate with each other (authorization).
+Controls which source services are allowed to send traffic to a destination service. The `Name` field specifies the **destination** (receiver), and `Sources` lists **who can connect to it**.
 
 ```hcl
 Kind = "service-intentions"
-Name = "web-service"
+Name = "web-service"        # Destination: who receives traffic
 
 Sources = [
   {
-    Name   = "ingress-gateway"
+    Name   = "ingress-gateway"  # Source: who is allowed to send traffic
     Action = "allow"
   }
 ]
 ```
 
-**Apply changes:** `consul config write ingress-intentions.hcl`
+This example allows `ingress-gateway` to send traffic to `web-service`.
+
+**Apply changes:** `consul config write web-service-intentions.hcl`
 
 
 ### URL Rewrites (`traefik-rewrite.hcl`)
@@ -179,8 +181,8 @@ job "web-service" {
 
 4. **Update intentions** (if needed for authorization)
    ```bash
-   # Edit ingress-intentions.hcl or create new-service-intentions.hcl
-   consul config write ingress-intentions.hcl
+   # Edit web-service-intentions.hcl or create new-service-intentions.hcl
+   consul config write web-service-intentions.hcl
    ```
 
 

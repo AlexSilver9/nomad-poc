@@ -12,7 +12,7 @@ aws/
     ├── business-service.hcl        # Nomad job
     ├── business-service-defaults.hcl
     ├── ingress-gateway.hcl         # Nomad job
-    ├── ingress-intentions.hcl      # Consul config entry
+    ├── web-service-intentions.hcl  # Consul config entry
     └── ...
 ```
 
@@ -35,7 +35,7 @@ aws/
 │       ├── business-service-defaults.hcl
 │       ├── business-service-api-defaults.hcl
 │       ├── business-service-router.hcl
-│       └── ingress-intentions.hcl
+│       └── web-service-intentions.hcl
 └── nomad/
     └── jobs/                       # Nomad job specifications
         ├── traefik-rewrite.hcl

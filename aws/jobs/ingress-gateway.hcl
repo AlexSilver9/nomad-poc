@@ -35,6 +35,11 @@ job "ingress-gateway" {
               }
 
               service {
+                name  = "rolling-update-service"
+                hosts = ["rolling-update-service"]
+              }
+
+              service {
                 name  = "web-service"
                 hosts = ["*"]
               }

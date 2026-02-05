@@ -251,7 +251,7 @@ configure_consul() {
         business-service-defaults.hcl
         business-service-api-defaults.hcl
         business-service-router.hcl
-        ingress-intentions.hcl
+        web-service-intentions.hcl
     )
     for file in "${consul_files[@]}"; do
         ssh_run "$first_node" "wget -q -O $file $GITHUB_RAW_BASE/jobs/$file"
@@ -470,15 +470,6 @@ download_demo_files() {
     log_info "=== STEP 10: Downloading demo files ==="
 
     local first_node="${NODES[0]}"
-
-    # Additional job files for manual testing
-    local extra_jobs=(
-        rolling-update-service.hcl
-    )
-    log_info "Downloading additional job files to $first_node..."
-    for file in "${extra_jobs[@]}"; do
-        ssh_run "$first_node" "wget -q -O $file $GITHUB_RAW_BASE/jobs/$file"
-    done
 
     # Shell scripts for manual testing
     local scripts=(

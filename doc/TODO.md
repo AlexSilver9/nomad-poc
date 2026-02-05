@@ -8,7 +8,9 @@
 - System Batch Jobs
 - Periodic Batch Job (Cron)
 - Job Lifecycle (Pre, Post, Sidecar, etc ...)
+- Ingress / Load-Balancing
 - Nginx Routing per URL mit Rewrite
+- Rolling Updates der Container
 
 # TODO:
 - Resources OOM doesn't raise
@@ -17,7 +19,7 @@
 - Node drain -> startet erst neue Allocs auf anderer Instanz und drained dann, oder andersrum?
     - Testen wie nah man an echte Zero-Downtime ran
 - Node drain per UI?
-- Rolling Updates der Container
+
 - AWS LoadBalancer -> Ingress Routing zum indizierten Container via DNS (insbesondere wenn Allocs dynamisch auf Nodes verteilt werden) 
 - Docker Stateful Jobs
 - Allocations auf andere Nodes verschieben, zwecks Sytemupgrade
@@ -26,6 +28,7 @@
 - Retry / Reschedule Policies
 - Timeouts & Exit Codes
 - Failure Handling
+- health checks (https://developer.hashicorp.com/nomad/docs/job-specification/check)
 - Variables (aka Kubernetes ConfigMaps)
 - Nomad Actions (https://developer.hashicorp.com/nomad/docs/job-declare/nomad-actions)
 - Node Anti-Affinity
@@ -37,7 +40,6 @@
 - ACLs + TLS
 - Volumes (lokaler flüchtiger Storage)
 - CSI (Container Storage Interface - Persistent Volume Mount - CSI Plugin Driver)
-- Ingress / Load-Balancing
 - Nomad Binary Update (https://developer.hashicorp.com/nomad/docs/upgrade) (https://developer.hashicorp.com/nomad/docs/upgrade/upgrade-specific)
 - systemd Unit Update
 - node pools & constraints

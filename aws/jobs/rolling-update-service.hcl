@@ -1,7 +1,7 @@
 # Service for testing rolling updates
 # https://developer.hashicorp.com/nomad/docs/job-declare/strategy/rolling
 
-job "rolling-upgrade-job" {
+job "rolling-update-job" {
 
   datacenters = ["dc1"]
   type        = "service"
@@ -17,7 +17,7 @@ job "rolling-upgrade-job" {
     auto_revert       = true  # Rollback on failed deployments, otherwise deployment fails and no further placing happens
   }
 
-  group "rolling-upgrade-group" {
+  group "rolling-update-group" {
     count = 1
 
     network {
@@ -29,7 +29,7 @@ job "rolling-upgrade-job" {
     }
 
     service {
-      name = "rolling-upgrade-service"
+      name = "rolling-update-service"
       port = "http"
 
       check {
@@ -48,13 +48,13 @@ job "rolling-upgrade-job" {
       }
     }
 
-    task "rolling-upgrade-task" {
+    task "rolling-update-task" {
       driver = "docker"
 
       config {
         #image = "traefik/whoami:v1.11.0"  # new image version
         image = "traefik/whoami:v1.10.0"  # old image version
-        args  = ["--port=8080", "--name=rolling-upgrade"]
+        args  = ["--port=8080", "--name=rolling-update"]
         ports = ["http"]
       }
 

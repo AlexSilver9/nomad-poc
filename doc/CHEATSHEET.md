@@ -23,7 +23,9 @@ nomad operator raft list-peers
 
 Run job:
 ```shell
-nomad job run <jobfile>.nomad
+nomad run <jobfile>
+# or 
+nomad job run <jobfile>
 ```
 
 List Jobs:
@@ -34,7 +36,7 @@ nomad status
 Job status:
 ```shell
 nomad status <jobname>
-or
+# or
 nomad job status <jobname>
 ```
 
@@ -54,15 +56,21 @@ nomad alloc status <allocation id>
 Logs:
 ```shell
 nomad logs -f <allocation id>
+# or
+nomad alloc logs -f <allocation id>
 ```
 
 Stop job:
 ```shell
+nomad stop <jobname>
+# or
 nomad job stop <jobname>
 ```
 
 Cleanup:
 ```shell
+nomad stop -purge <jobname>
+# or
 nomad job stop -purge <jobname>
 ```
 
@@ -70,6 +78,27 @@ Server members:
 ```shell
 nomad server members
 ```
+
+Dry rum Upgrade deployment:
+```shell
+nomad job plan <jobfile>
+```
+
+Insect Upgrade deployment:
+```shell
+nomad status <jobname>
+```
+
+Show deployments:
+```shell
+nomad job deployments <jobname>
+```
+
+Job history:
+```shell
+nomad job history -p <jobname>
+```
+
 
 # Job Specification
 

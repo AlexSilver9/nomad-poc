@@ -1,6 +1,22 @@
 # Service for testing rolling updates
 # https://developer.hashicorp.com/nomad/docs/job-declare/strategy/rolling
 
+# In Rolling Update old versions of running allocs are replaced by new versions
+# in a fashion that a specific amount of old versions are undeployed
+# only if a specific amount of new versions are deployed and healthy for a specific.
+# Once all old versions are replaced by new versions, the deployment is successful.
+#
+# When auto_revert = true and a deployment fails, all allocations are rolled back
+# to the previous job version - not just the unhealthy ones.
+
+# 1. Nomad detects an allocation failed to become healthy within healthy_deadline
+# 2. The entire deployment is marked as failed
+# 3. Nomad automatically submits the previous job version as a new deployment
+# 4. All allocations (incl. successfully upgraded) are replaced with the previous version
+
+# To prevent automatic rollback e.g. for manually investigation of failed deployments, set auto_revert = false.
+# The deployment will fail but allocations won't be changed automatically.
+
 job "rolling-update-job" {
 
   datacenters = ["dc1"]

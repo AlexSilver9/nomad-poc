@@ -474,6 +474,7 @@ download_demo_files() {
     # Shell scripts for manual testing
     local scripts=(
         rolling_update.sh
+        canary_update.sh
     )
     log_info "Downloading shell scripts to $first_node..."
     for file in "${scripts[@]}"; do

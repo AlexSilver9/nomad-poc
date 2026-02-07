@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-# Demonstrates a Canary Deployment with traffic routing via ALB.
+# Demonstrates a Isolated Canary Deployment with traffic routing via ALB.
 #
 # Canary deployments run new versions ALONGSIDE existing versions,
 # allowing to test before promoting. Unlike rolling updates,
@@ -25,6 +25,7 @@ echo "=== STEP 1: Download required files ==="
 wget -q -O "$JOB_FILE" "$GITHUB_RAW_BASE/$JOB_FILE"
 wget -q -O canary-update-service-defaults.hcl "$GITHUB_RAW_BASE/canary-update-service-defaults.hcl"
 wget -q -O canary-update-service-intentions.hcl "$GITHUB_RAW_BASE/canary-update-service-intentions.hcl"
+wget -q -O canary-update-service-resolver.hcl "$GITHUB_RAW_BASE/canary-update-service-resolver.hcl"
 wget -q -O ingress-gateway.hcl "$GITHUB_RAW_BASE/ingress-gateway.hcl"
 wget -q -O ingress-gateway-with-canary-update.hcl "$GITHUB_RAW_BASE/ingress-gateway-with-canary-update.hcl"
 echo "Downloaded job, Consul config, and ingress gateway files"
@@ -35,7 +36,8 @@ read -p "Press Enter to apply Consul configurations and update ingress gateway..
 echo "=== STEP 2: Apply Consul configurations ==="
 consul config write canary-update-service-defaults.hcl
 consul config write canary-update-service-intentions.hcl
-echo "Consul service-defaults and intentions applied"
+consul config write canary-update-service-resolver.hcl
+echo "Consul service-defaults, intentions, and resolver applied"
 
 echo "=== Updating ingress gateway to include canary-update-service ==="
 nomad job run ingress-gateway-with-canary-update.hcl
@@ -60,7 +62,7 @@ echo "To watch traffic routing during canary deployment, run in another terminal
 echo ""
 echo "  while true; do curl -sH 'Host: canary-update-service' http://<ALB_DNS>/ | grep -E '(Hostname|Name)'; sleep 0.5; done"
 echo ""
-echo "You should see traffic going to BOTH old and canary allocations."
+echo "Currently all traffic goes to stable allocations only."
 echo "=============================================="
 
 read -p "Press Enter to update the image version (create canary)..."
@@ -85,7 +87,7 @@ echo ""
 echo "Canary deployed! Note:"
 echo "  - 1 canary allocation with NEW version is now running"
 echo "  - 2 existing allocations with OLD version are STILL running"
-echo "  - Traffic is routed to ALL allocations (old + canary)"
+echo "  - Traffic goes ONLY to stable allocations until resolver is removed"
 echo ""
 
 read -p "Press Enter to see deployment status..."
@@ -101,37 +103,50 @@ nomad deployment status "$DEPLOYMENT_ID"
 
 echo ""
 echo "=============================================="
-echo "The canary is running alongside old allocations."
-echo "You can test the new version while old version continues serving traffic."
+echo "The canary is running but receives NO traffic (resolver filter active)."
+echo "Test the canary directly via its allocation IP address."
+echo "Find canary allocation IP via:"
+echo "  nomad alloc status <canary-alloc-id> | grep -A5 'Allocation Addresses'"
 echo ""
 echo "Options:"
 echo "  - Promote: nomad deployment promote $DEPLOYMENT_ID"
 echo "  - Fail:    nomad deployment fail $DEPLOYMENT_ID"
 echo "=============================================="
 
+read -p "Press Enter to remove the resolver filter to ENABLE traffic to canary ..."
+
+# Step 9: Remove resolver to enable canary traffic
+echo "=== STEP 9: Remove resolver filter (enable canary traffic) ==="
+consul config delete -kind service-resolver -name "$JOB_NAME"
+echo "Resolver removed - canary now receives traffic alongside stable allocations"
+echo ""
+echo "Watch the traffic in another terminal - you should now see"
+echo "requests hitting both old and new (canary) allocations."
+
 read -p "Press Enter to PROMOTE the canary deployment..."
 
-# Step 9: Promote canary
-echo "=== STEP 9: Promote canary deployment ==="
+# Step 10: Promote canary
+echo "=== STEP 10: Promote canary deployment ==="
 nomad deployment promote "$DEPLOYMENT_ID"
 echo "Canary promoted! Old allocations will now be replaced with new version."
 
 read -p "Press Enter to verify promotion completed..."
 
-# Step 10: Verify promotion
-echo "=== STEP 10: Verify all allocations are running new version ==="
+# Step 11: Verify promotion
+echo "=== STEP 11: Verify all allocations are running new version ==="
 nomad job status "$JOB_NAME"
 
 read -p "Press Enter to stop and purge the job..."
 
-# Step 11: Stop and purge job
-echo "=== STEP 11: Stop and purge job ==="
+# Step 12: Stop and purge job
+echo "=== STEP 12: Stop and purge job ==="
 nomad job stop -purge "$JOB_NAME"
 
-# Step 12: Cleanup
-echo "=== STEP 12: Cleanup ==="
+# Step 13: Cleanup
+echo "=== STEP 13: Cleanup ==="
 
 echo "Removing Consul config entries..."
+consul config delete -kind service-resolver -name "$JOB_NAME" || true
 consul config delete -kind service-intentions -name "$JOB_NAME" || true
 consul config delete -kind service-defaults -name "$JOB_NAME" || true
 

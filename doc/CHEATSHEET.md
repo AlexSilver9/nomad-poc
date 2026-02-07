@@ -94,10 +94,32 @@ Show deployments:
 nomad job deployments <jobname>
 ```
 
+Deployment status:
+```shell
+nomad deployment status <deployment id>
+```
+
+Get Allocation IP address (e.g. for Testing isolated Canary alloc)
+```shell
+nomad alloc status <canary allocation id> | grep -A5 'Allocation Addresses'
+```
+
+Fail deployment (Rollback Canary)
+```shell
+nomad deployment fail <deployment id>
+```
+
+Promote deployment (Approve Canary for Rollout)
+```shell
+nomad deployment promote <deployment id>
+```
+
 Job history:
 ```shell
 nomad job history -p <jobname>
 ```
+
+
 
 
 # Job Specification

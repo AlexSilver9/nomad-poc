@@ -99,7 +99,7 @@ Deployment status:
 nomad deployment status <deployment id>
 ```
 
-Get Allocation IP address (e.g. for Testing isolated Canary alloc)
+Get Allocation IP address (e.g. for Testing Canary alloc directly)
 ```shell
 nomad alloc status <canary allocation id> | grep -A5 'Allocation Addresses'
 ```

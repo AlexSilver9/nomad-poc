@@ -3,6 +3,8 @@ set -euo pipefail
 
 # Demonstrates Nomad node drain: gracefully migrates allocations off a node.
 #
+# https://developer.hashicorp.com/nomad/commands/node/drain
+#
 # Use cases: maintenance, OS patching, scaling down, replacing nodes.
 # Nomad moves allocations to other eligible nodes before marking the node
 # as ineligible for new placements.

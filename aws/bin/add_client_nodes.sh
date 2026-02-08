@@ -96,7 +96,7 @@ wait
 for dns in "${CLIENT_DNS[@]}"; do
     echo "Installing Nomad on $dns..."
     ssh $SSH_OPTS -i "$SSH_KEY" ec2-user@"$dns" \
-        "ADD_USER_TO_DOCKER=yes curl --proto '=https' --tlsv1.2 -sSf $GITHUB_RAW_BASE/bin/setup_nomad_client.sh | bash -s -- $SERVER_NODES" &
+        "curl --proto '=https' --tlsv1.2 -sSf $GITHUB_RAW_BASE/bin/setup_nomad_client.sh | ADD_USER_TO_DOCKER=yes bash -s -- $SERVER_NODES" &
 done
 wait
 

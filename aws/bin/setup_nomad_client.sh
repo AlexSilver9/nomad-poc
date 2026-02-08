@@ -16,10 +16,13 @@ ADD_USER_TO_DOCKER="${ADD_USER_TO_DOCKER:-}"  # Set to "yes" for non-interactive
 # Function to ask yes/no questions, returns 0 for yes and 1 for no
 ask_user() {
   local question="$1"
-  local answer
+  local answer=""
+
+  # Skip interactive prompt if /dev/tty is not available (piped execution)
+  [[ -t 0 ]] || [[ -e /dev/tty ]] || return 1
 
   while true; do
-    read -r -p "$question (y/N): " answer </dev/tty
+    read -r -p "$question (y/N): " answer </dev/tty || return 1
     case "$answer" in
       [Yy]) return 0 ;;  # Yes
       [Nn]|'') return 1 ;;  # No (default)

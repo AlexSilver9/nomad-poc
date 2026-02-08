@@ -117,7 +117,33 @@ else
 fi
 
 echo ""
-echo "Done. Created $COUNT client node(s):"
-printf '  %s\n' "${CLIENT_DNS[@]}"
+echo "=============================================="
+echo "  Done. Created $COUNT client node(s)"
+echo "=============================================="
 echo ""
-echo "Verify with: nomad node status"
+echo "SSH to server nodes:"
+for node in $SERVER_NODES; do
+    echo "  ssh -o StrictHostKeyChecking=accept-new -i $SSH_KEY ec2-user@$node"
+done
+echo ""
+echo "SSH to client nodes:"
+for i in "${!CLIENT_DNS[@]}"; do
+    echo "  ssh -o StrictHostKeyChecking=accept-new -i $SSH_KEY ec2-user@${CLIENT_DNS[$i]}"
+done
+echo ""
+ALB_DNS=$(aws elbv2 describe-load-balancers --names nomad-alb --query 'LoadBalancers[0].DNSName' --output text 2>/dev/null || echo "")
+if [[ -n "$ALB_DNS" && "$ALB_DNS" != "None" ]]; then
+    echo "ALB DNS: $ALB_DNS"
+    echo ""
+fi
+FIRST_SERVER=$(echo "$SERVER_NODES" | awk '{print $1}')
+echo "UIs:"
+echo "  Nomad:  http://$FIRST_SERVER:4646"
+echo "  Consul: http://$FIRST_SERVER:8500"
+echo ""
+echo "Verify commands:"
+echo "  nomad node status                    # Show all nodes (run from any server)"
+echo "  consul members                       # Show Consul cluster members"
+echo "  nomad node status -self              # Run on client node to check self"
+echo "  journalctl -u nomad.service -f       # Follow Nomad logs on client node"
+echo "  journalctl -u consul.service -f      # Follow Consul logs on client node"

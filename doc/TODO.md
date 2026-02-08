@@ -12,19 +12,18 @@
 - Nginx Routing per URL mit Rewrite
 - Rolling Updates der Container
 - Canary Updates der Container
+- Node Isolation (Spezialserver -> eigener Namespace? -> HA?) -> Node Pool
 - Node drain per UI? -> YES
+- Node-Schwenk
+- Node drain -> startet erst neue Allocs auf anderer Instanz und drained dann
+- AWS LoadBalancer -> Ingress Routing zum indizierten Container via DNS (insb. wenn Allocs dynamisch auf Nodes verteilt werden) 
 
 
 # TODO:
+- Ingress Connection Drop on Config Update? (consul config write)
 - Resources OOM doesn't raise
 - Deploments auf verschiedenen Ports (1 Alloc)
-- Node-Schwenk
-- Node drain -> startet erst neue Allocs auf anderer Instanz und drained dann, oder andersrum?
-    - Testen wie nah man an echte Zero-Downtime ran
-
-- AWS LoadBalancer -> Ingress Routing zum indizierten Container via DNS (insbesondere wenn Allocs dynamisch auf Nodes verteilt werden) 
 - Docker Stateful Jobs
-- Allocations auf andere Nodes verschieben, zwecks Sytemupgrade
 - Start container with interactive shell
 - Start interactive Shell on running container
 - Retry / Reschedule Policies
@@ -36,7 +35,6 @@
 - Nomad Actions (https://developer.hashicorp.com/nomad/docs/job-declare/nomad-actions)
 - Node Anti-Affinity
 - Indexed Containers (Container X, Y, Z run only on Node X)
-- Node Isolation (Spezialserver -> eigener Namespace? -> HA?)
 - Test System(-Batch) vs. Constrain.distinctHost auf Cluster mit dedizierten Clients, isolated Clients und Servern, ob die Jobs auf Client und/oder Server ausgeführt werden
 - Vault Secrets (https://developer.hashicorp.com/nomad/docs/secure/vault)
 - Vault TLS

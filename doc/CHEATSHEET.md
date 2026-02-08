@@ -124,7 +124,15 @@ Garbage Collection
 nomad system gc
 ```
 
+Node Drain Enable
+```shell
+nomad node drain -enable -yes <node-id>
+```
 
+Node Drain Disable
+```shell
+nomad node drain -disable -yes <node-id>
+```
 
 # Job Specification
 

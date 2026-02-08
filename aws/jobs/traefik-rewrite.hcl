@@ -1,6 +1,7 @@
 job "traefik-rewrite" {
   datacenters = ["dc1"]
   type        = "system"  # Runs on ALL nodes
+  node_pool   = "all"
 
   group "traefik" {
     network {

@@ -2,7 +2,8 @@ job "ingress-gateway" {
   datacenters = ["dc1"]
 
   # Runs on all nodes for HA (or use type = "service" with count = 3 for specific replica count)
-  type = "system"
+  type      = "system"
+  node_pool = "all"
 
   group "ingress" {
     network {

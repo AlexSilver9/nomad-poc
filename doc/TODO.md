@@ -11,6 +11,9 @@
 - Ingress / Load-Balancing
 - Nginx Routing per URL mit Rewrite
 - Rolling Updates der Container
+- Canary Updates der Container
+- Node drain per UI? -> YES
+
 
 # TODO:
 - Resources OOM doesn't raise
@@ -18,7 +21,6 @@
 - Node-Schwenk
 - Node drain -> startet erst neue Allocs auf anderer Instanz und drained dann, oder andersrum?
     - Testen wie nah man an echte Zero-Downtime ran
-- Node drain per UI?
 
 - AWS LoadBalancer -> Ingress Routing zum indizierten Container via DNS (insbesondere wenn Allocs dynamisch auf Nodes verteilt werden) 
 - Docker Stateful Jobs

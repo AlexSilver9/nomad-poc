@@ -4,7 +4,8 @@
 job "ingress-gateway" {
   datacenters = ["dc1"]
 
-  type = "system"
+  type      = "system"
+  node_pool = "all"
 
   group "ingress" {
     network {

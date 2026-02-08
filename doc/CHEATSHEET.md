@@ -23,9 +23,9 @@ nomad operator raft list-peers
 
 Run job:
 ```shell
-nomad run <jobfile>
+nomad run <job-file>
 # or 
-nomad job run <jobfile>
+nomad job run <job-file>
 ```
 
 List Jobs:
@@ -35,9 +35,9 @@ nomad status
 
 Job status:
 ```shell
-nomad status <jobname>
+nomad status <job-name>
 # or
-nomad job status <jobname>
+nomad job status <job-name>
 ```
 
 Allocation Id:
@@ -45,33 +45,33 @@ Allocation Id:
 
 Allocations (inkl. ID) für Job:
 ```shell
-nomad job allocs <jobname>
+nomad job allocs <job-name>
 ```
 
 Allocation status (incl. Dynamic Port Mapping):
 ```shell
-nomad alloc status <allocation id>
+nomad alloc status <allocation-id>
 ```
 
 Logs:
 ```shell
-nomad logs -f <allocation id>
+nomad logs -f <allocation-id>
 # or
-nomad alloc logs -f <allocation id>
+nomad alloc logs -f <allocation-id>
 ```
 
 Stop job:
 ```shell
-nomad stop <jobname>
+nomad stop <job-name>
 # or
-nomad job stop <jobname>
+nomad job stop <job-name>
 ```
 
 Cleanup:
 ```shell
-nomad stop -purge <jobname>
+nomad stop -purge <job-name>
 # or
-nomad job stop -purge <jobname>
+nomad job stop -purge <job-name>
 ```
 
 Server members:
@@ -81,44 +81,48 @@ nomad server members
 
 Dry rum Upgrade deployment:
 ```shell
-nomad job plan <jobfile>
+nomad job plan <job-file>
 ```
 
 Insect Upgrade deployment:
 ```shell
-nomad status <jobname>
+nomad status <job-name>
 ```
 
 Show deployments:
 ```shell
-nomad job deployments <jobname>
+nomad job deployments <job-name>
 ```
 
 Deployment status:
 ```shell
-nomad deployment status <deployment id>
+nomad deployment status <deployment-id>
 ```
 
 Get Allocation IP address (e.g. for Testing Canary alloc directly)
 ```shell
-nomad alloc status <canary allocation id> | grep -A5 'Allocation Addresses'
+nomad alloc status <canary allocation-id> | grep -A5 'Allocation Addresses'
 ```
 
 Fail deployment (Rollback Canary)
 ```shell
-nomad deployment fail <deployment id>
+nomad deployment fail <deployment-id>
 ```
 
 Promote deployment (Approve Canary for Rollout)
 ```shell
-nomad deployment promote <deployment id>
+nomad deployment promote <deployment-id>
 ```
 
 Job history:
 ```shell
-nomad job history -p <jobname>
+nomad job history -p <job-name>
 ```
 
+Garbage Collection
+```shell
+nomad system gc
+```
 
 
 

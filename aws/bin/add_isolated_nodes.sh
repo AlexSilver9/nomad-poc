@@ -114,8 +114,9 @@ wait
 # Configure node_pool on each node
 echo "Configuring node pool '$NODE_POOL' on isolated nodes..."
 for dns in "${CLIENT_DNS[@]}"; do
-    ssh $SSH_OPTS -i "$SSH_KEY" ec2-user@"$dns" \
-        "sudo sed -i '/^client {/a\\  node_pool = \"$NODE_POOL\"' /etc/nomad.d/nomad.hcl && sudo systemctl restart nomad"
+    ssh $SSH_OPTS -i "$SSH_KEY" ec2-user@"$dns" "
+sudo sed -i '/^client {/a\\  node_pool = \"$NODE_POOL\"\n\n  meta {\n    workload_type = \"sensitive-workloads\"\n  }' /etc/nomad.d/nomad.hcl
+sudo systemctl restart nomad"
 done
 
 # Register with target group

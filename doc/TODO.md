@@ -19,8 +19,8 @@
 
 
 # TODO:
-- Deploments auf verschiedenen Ports (1 Alloc) ???
-- Volumes (lokaler flüchtiger Storage / CSI)
+- File Organization
+- Volumes (EFS / lokaler flüchtiger Storage / CSI)
 - ACLs + TLS
 - Nomad Binary Update
     - https://developer.hashicorp.com/nomad/docs/upgrade

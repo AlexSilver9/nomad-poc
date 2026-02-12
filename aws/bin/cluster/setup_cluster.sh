@@ -480,6 +480,7 @@ download_demo_files() {
         canary_update.sh
         sensitive_service.sh
         node_drain.sh
+        eval_system_jobs.sh
     )
     log_info "Downloading shell scripts to $first_node..."
     for file in "${scripts[@]}"; do

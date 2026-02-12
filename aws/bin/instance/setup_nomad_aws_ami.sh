@@ -175,6 +175,11 @@ client {
   servers = [
 ${servers}
   ]
+
+  host_volume "efs" {
+    path      = "/mnt/efs"
+    read_only = false
+  }
 }
 EOF
 

@@ -6,7 +6,7 @@ set -euo pipefail
 # Requires: aws-cli, jq, SSH key at ~/workspace/nomad/nomad-keypair.pem
 # Usage: ./setup_cluster.sh
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cluster"
 SSH_KEY="${SSH_KEY:-$HOME/workspace/nomad/nomad-keypair.pem}"
 SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10"
 TARGET_GROUP_NAME="nomad-target-group"

@@ -60,6 +60,18 @@ aws efs create-mount-target \
     --subnet-id "$SUBNET_ID" \
     --security-groups "$SECURITY_GROUP" > /dev/null
 
+echo "Waiting for mount target to become available..."
+while true; do
+    MT_STATE=$(aws efs describe-mount-targets --file-system-id "$FS_ID" \
+        --query 'MountTargets[0].LifeCycleState' --output text)
+    if [[ "$MT_STATE" == "available" ]]; then
+        break
+    fi
+    echo "  Mount target state: $MT_STATE, waiting..."
+    sleep 5
+done
+echo "Mount target is available"
+
 echo ""
 echo "EFS file system created:"
 echo "  Name:            $EFS_NAME"

@@ -39,7 +39,7 @@ FIRST_SERVER=$(echo "$SERVER_NODES" | awk '{print $1}')
 # Create node pool on the cluster
 echo "Creating node pool '$NODE_POOL'..."
 ssh $SSH_OPTS -i "$SSH_KEY" ec2-user@"$FIRST_SERVER" \
-    "wget -q -O $NODE_POOL.hcl $GITHUB_RAW_BASE/jobs/$NODE_POOL.hcl && nomad node pool apply $NODE_POOL.hcl"
+    "wget -q -O node-pool.nomad.hcl $GITHUB_RAW_BASE/services/sensitive-service/node-pool.nomad.hcl && nomad node pool apply node-pool.nomad.hcl"
 
 # Determine next node number
 EXISTING=$(aws ec2 describe-instances \

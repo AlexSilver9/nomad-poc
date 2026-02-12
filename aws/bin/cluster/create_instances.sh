@@ -14,12 +14,17 @@ command -v jq &>/dev/null || { echo "Error: jq required"; exit 1; }
 instance_prefix="nomad"
 instance_ids=()
 
+# Get latest Amazon Linux 2 image id
+aws_ami_image_id=$(aws ssm get-parameter \
+    --name /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2 \
+    --query 'Parameter.Value' --output text)
+
 for i in {1..3}; do
     name="$instance_prefix$i"
     echo "Creating instance $name..."
     
     result=$(aws ec2 run-instances \
-        --image-id 'ami-0191d47ba10441f0b' \
+        --image-id "$aws_ami_image_id" \
         --instance-type 't3.micro' \
         --key-name 'nomad-keypair' \
         --network-interfaces '{"SubnetId":"subnet-3ee53954","AssociatePublicIpAddress":true,"DeviceIndex":0,"Groups":["sg-07fee22cbcdad4c58","sg-09aa7199da65ed0e3","sg-0beaa6c98d73ebd3b","sg-08e51d2a581377e0b","sg-77476f14"]}' \

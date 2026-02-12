@@ -3,4 +3,5 @@ set -euo pipefail
 
 # Drops and rebuilds the cluster
 
-./cluster/terminate_instances.sh && ./cluster/delete_albs.sh --all && ./cluster/delete_target_group.sh --all && ./cluster/setup_cluster.sh
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+"$SCRIPT_DIR/terminate_instances.sh" && "$SCRIPT_DIR/delete_albs.sh" --all && "$SCRIPT_DIR/delete_target_group.sh" --all && "$SCRIPT_DIR/setup_cluster.sh"

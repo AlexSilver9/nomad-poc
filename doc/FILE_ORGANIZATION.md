@@ -24,6 +24,8 @@ aws/
 │   │   ├── create_alb.sh                   # Create Application Load Balancer
 │   │   ├── delete_albs.sh                  # Delete ALBs and listeners
 │   │   ├── delete_target_group.sh          # Delete target groups
+│   │   ├── create_efs.sh                  # Create EFS file system
+│   │   ├── delete_efs.sh                  # Delete EFS file systems
 │   │   ├── add_client_nodes.sh             # Add client-only nodes to cluster
 │   │   ├── add_isolated_nodes.sh           # Add isolated node pool nodes
 │   │   └── rebuild_cluster.sh              # Tear down and rebuild entire cluster
@@ -32,6 +34,7 @@ aws/
 │       ├── setup_nomad_aws_ami.sh          # Install Nomad server+client and Docker
 │       ├── setup_consul_client.sh          # Install Consul client-only (joins existing cluster)
 │       ├── setup_nomad_client.sh           # Install Nomad client-only (joins existing cluster)
+│       ├── mount_efs.sh                    # Mount EFS file system on instance
 │       ├── canary_update.sh                # Demo: canary deployment
 │       ├── rolling_update.sh               # Demo: rolling update deployment
 │       ├── sensitive_service.sh            # Demo: sensitive service on isolated node pool

@@ -14,6 +14,7 @@ SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10"
 TARGET_GROUP_NAME="nomad-target-group"
 TARGET_PORT=8081
 NODE_POOL="sensitive-node-pool"
+EFS_NAME="nomad-efs"
 GITHUB_RAW_BASE="https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws"
 
 COUNT="${1:-1}"
@@ -92,6 +93,22 @@ for dns in "${CLIENT_DNS[@]}"; do
     done
     echo " $dns ready"
 done
+
+# Mount EFS on each node
+EFS_ID=$(aws efs describe-file-systems \
+    --query "FileSystems[?Name=='$EFS_NAME'].FileSystemId" \
+    --output text)
+if [[ -n "$EFS_ID" && "$EFS_ID" != "None" ]]; then
+    echo "Mounting EFS ($EFS_ID) on isolated nodes..."
+    for dns in "${CLIENT_DNS[@]}"; do
+        ssh $SSH_OPTS -i "$SSH_KEY" ec2-user@"$dns" \
+            "curl --proto '=https' --tlsv1.2 -sSf $GITHUB_RAW_BASE/bin/instance/mount_efs.sh | bash -s -- $EFS_ID" &
+    done
+    wait
+    echo "EFS mounted on all isolated nodes"
+else
+    echo "Warning: EFS '$EFS_NAME' not found, skipping mount"
+fi
 
 # Install Consul (client-only)
 echo "Installing Consul on isolated nodes..."

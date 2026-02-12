@@ -11,6 +11,7 @@ SSH_KEY="${SSH_KEY:-$HOME/workspace/nomad/nomad-keypair.pem}"
 SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10"
 TARGET_GROUP_NAME="nomad-target-group"
 ALB_NAME="nomad-alb"
+EFS_NAME="nomad-efs"
 
 # GitHub raw URL for setup scripts
 GITHUB_RAW_BASE="https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws"
@@ -112,23 +113,67 @@ create_instances() {
 }
 
 #------------------------------------------------------------------------------
-# STEP 2: Wait for instances to be ready
+# STEP 2: Create EFS file system
+#------------------------------------------------------------------------------
+create_efs() {
+    log_info "=== STEP 2: Creating EFS file system ==="
+    "$SCRIPT_DIR/create_efs.sh"
+
+    # Look up file system ID
+    EFS_ID=$(aws efs describe-file-systems \
+        --query "FileSystems[?Name=='$EFS_NAME'].FileSystemId" \
+        --output text)
+
+    if [[ -z "$EFS_ID" || "$EFS_ID" == "None" ]]; then
+        log_error "EFS '$EFS_NAME' not found after creation"
+        exit 1
+    fi
+
+    log_success "EFS ready: $EFS_ID"
+    export EFS_ID
+}
+
+#------------------------------------------------------------------------------
+# STEP 3: Wait for instances to be ready and mount EFS
 #------------------------------------------------------------------------------
 wait_for_instances() {
-    log_info "=== STEP 2: Waiting for instances to be ready ==="
+    log_info "=== STEP 3: Waiting for instances to be ready ==="
 
     for node in "${NODES[@]}"; do
         wait_for_ssh "$node"
     done
 
     log_success "All instances are accessible via SSH"
+
+    # Mount EFS on all nodes
+    log_info "Mounting EFS ($EFS_ID) on all nodes..."
+    local pids=()
+    for node in "${NODES[@]}"; do
+        ssh_run "$node" "curl --proto '=https' --tlsv1.2 -sSf $GITHUB_RAW_BASE/bin/instance/mount_efs.sh | bash -s -- $EFS_ID" &
+        pids+=($!)
+    done
+
+    local failed=0
+    for i in "${!pids[@]}"; do
+        if wait "${pids[$i]}"; then
+            log_success "EFS mounted on ${NODES[$i]}"
+        else
+            log_error "EFS mount failed on ${NODES[$i]}"
+            ((failed++))
+        fi
+    done
+
+    if [[ $failed -gt 0 ]]; then
+        log_error "$failed node(s) failed EFS mount"
+        exit 1
+    fi
 }
 
 #------------------------------------------------------------------------------
-# STEP 3: Install Consul on all nodes
+# STEP 4: Install Consul on all nodes
 #------------------------------------------------------------------------------
 install_consul() {
-    log_info "=== STEP 3: Installing Consul on all nodes (parallel) ==="
+    log_info "=== STEP 4: Installing Consul on all nodes (parallel) ==="
 
     # Build node arguments for setup script
     local node_args="${NODES[*]}"
@@ -179,10 +224,10 @@ install_consul() {
 }
 
 #------------------------------------------------------------------------------
-# STEP 4: Install Nomad on all nodes
+# STEP 5: Install Nomad on all nodes
 #------------------------------------------------------------------------------
 install_nomad() {
-    log_info "=== STEP 4: Installing Nomad on all nodes (parallel) ==="
+    log_info "=== STEP 5: Installing Nomad on all nodes (parallel) ==="
 
     # Build node arguments for setup script
     local node_args="${NODES[*]}"
@@ -234,10 +279,10 @@ install_nomad() {
 }
 
 #------------------------------------------------------------------------------
-# STEP 5: Configure Consul (service-defaults, router, ingress, intentions)
+# STEP 6: Configure Consul (service-defaults, router, ingress, intentions)
 #------------------------------------------------------------------------------
 configure_consul() {
-    log_info "=== STEP 5: Configuring Consul service mesh ==="
+    log_info "=== STEP 6: Configuring Consul service mesh ==="
 
     local first_node="${NODES[0]}"
 
@@ -279,10 +324,10 @@ configure_consul() {
 }
 
 #------------------------------------------------------------------------------
-# STEP 6: Run Nomad jobs
+# STEP 7: Run Nomad jobs
 #------------------------------------------------------------------------------
 run_nomad_jobs() {
-    log_info "=== STEP 6: Running Nomad jobs ==="
+    log_info "=== STEP 7: Running Nomad jobs ==="
 
     local first_node="${NODES[0]}"
 
@@ -334,10 +379,10 @@ run_nomad_jobs() {
 }
 
 #------------------------------------------------------------------------------
-# STEP 7: Test internal routing
+# STEP 8: Test internal routing
 #------------------------------------------------------------------------------
 test_internal_routing() {
-    log_info "=== STEP 7: Testing internal routing ==="
+    log_info "=== STEP 8: Testing internal routing ==="
 
     local first_node="${NODES[0]}"
 
@@ -379,10 +424,10 @@ test_internal_routing() {
 }
 
 #------------------------------------------------------------------------------
-# STEP 8: Create AWS Load Balancer
+# STEP 9: Create AWS Load Balancer
 #------------------------------------------------------------------------------
 create_load_balancer() {
-    log_info "=== STEP 8: Creating AWS Load Balancer ==="
+    log_info "=== STEP 9: Creating AWS Load Balancer ==="
 
     # Check if target group exists
     local existing_tg
@@ -415,10 +460,10 @@ create_load_balancer() {
 }
 
 #------------------------------------------------------------------------------
-# STEP 9: Wait for targets and test ALB
+# STEP 10: Wait for targets and test ALB
 #------------------------------------------------------------------------------
 wait_and_test_alb() {
-    log_info "=== STEP 9: Waiting for targets to be healthy ==="
+    log_info "=== STEP 10: Waiting for targets to be healthy ==="
 
     TARGET_GROUP_ARN=$(aws elbv2 describe-target-groups --names "$TARGET_GROUP_NAME" --query 'TargetGroups[0].TargetGroupArn' --output text)
 
@@ -467,10 +512,10 @@ wait_and_test_alb() {
 }
 
 #------------------------------------------------------------------------------
-# STEP 10: Download demo files (not run automatically)
+# STEP 11: Download demo files (not run automatically)
 #------------------------------------------------------------------------------
 download_demo_files() {
-    log_info "=== STEP 10: Downloading demo files ==="
+    log_info "=== STEP 11: Downloading demo files ==="
 
     local first_node="${NODES[0]}"
 
@@ -501,6 +546,7 @@ main() {
 
     check_dependencies
     create_instances
+    create_efs
     wait_for_instances
     install_consul
     install_nomad

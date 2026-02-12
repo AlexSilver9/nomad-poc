@@ -90,8 +90,6 @@ nomad node drain -disable -yes "$NODE_ID"
 echo ""
 echo "Drain disabled. Node is now eligible for new placements again."
 echo ""
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-"$SCRIPT_DIR/eval_system_jobs.sh"
 
 read -p "Press Enter to verify the node is back to normal..."
 

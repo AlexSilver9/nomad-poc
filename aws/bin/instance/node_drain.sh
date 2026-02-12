@@ -44,7 +44,7 @@ read -p "Press Enter to show allocations on this node..."
 
 # Step 2: Show allocations on the node
 echo "=== STEP 2: Allocations on node $NODE_ID ==="
-nomad node status -verbose "$NODE_ID" | grep -A 100 "^Allocations" || echo "(no allocations)"
+nomad node status -verbose "$NODE_ID" | { grep -A 100 "^Allocations" || echo "(no allocations)"; }
 
 echo ""
 echo "=============================================="
@@ -66,10 +66,10 @@ read -p "Press Enter to check drain and migration status..."
 echo "=== STEP 4: Drain and migration status ==="
 echo ""
 echo "Node status:"
-nomad node status "$NODE_ID" | head -20
+nomad node status "$NODE_ID" | { head -20 || true; }
 echo ""
 echo "Allocations (should show migrated/stopped allocs):"
-nomad node status -verbose "$NODE_ID" | grep -A 100 "^Allocations" || echo "(no allocations)"
+nomad node status -verbose "$NODE_ID" | { grep -A 100 "^Allocations" || echo "(no allocations)"; }
 
 echo ""
 echo "=============================================="
@@ -94,7 +94,7 @@ read -p "Press Enter to verify the node is back to normal..."
 
 # Step 6: Verify node is eligible again
 echo "=== STEP 6: Verify node status ==="
-nomad node status "$NODE_ID" | head -20
+nomad node status "$NODE_ID" | { head -20 || true; }
 
 echo ""
 echo "=============================================="

@@ -28,10 +28,24 @@ if mountpoint -q "$MOUNT_POINT" 2>/dev/null; then
     exit 0
 fi
 
-# Create mount point and mount
+# Create mount point and mount (retry until DNS resolves)
 sudo mkdir -p "$MOUNT_POINT"
 echo "Mounting $FS_ID at $MOUNT_POINT..."
-sudo mount -t efs "$FS_ID":/ "$MOUNT_POINT"
+MAX_ATTEMPTS=24
+ATTEMPT=1
+while [[ $ATTEMPT -le $MAX_ATTEMPTS ]]; do
+    if sudo mount -t efs "$FS_ID":/ "$MOUNT_POINT" 2>/dev/null; then
+        break
+    fi
+    echo "  Mount attempt $ATTEMPT/$MAX_ATTEMPTS failed (DNS may not be ready), retrying in 5s..."
+    sleep 5
+    ((ATTEMPT++))
+done
+
+if ! mountpoint -q "$MOUNT_POINT"; then
+    echo "Error: Failed to mount $FS_ID after $MAX_ATTEMPTS attempts"
+    exit 1
+fi
 
 # Add fstab entry for persistence across reboots
 if ! grep -q "$FS_ID" /etc/fstab; then

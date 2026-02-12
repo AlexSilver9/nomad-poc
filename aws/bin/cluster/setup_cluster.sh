@@ -7,7 +7,6 @@ set -euo pipefail
 # Usage: ./setup_cluster.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-JOBS_DIR="$(cd "$SCRIPT_DIR/../jobs" && pwd)"
 SSH_KEY="${SSH_KEY:-$HOME/workspace/nomad/nomad-keypair.pem}"
 SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10"
 TARGET_GROUP_NAME="nomad-target-group"
@@ -137,7 +136,7 @@ install_consul() {
 
     for node in "${NODES[@]}"; do
         log_info "Starting Consul install on $node..."
-        ssh_run "$node" "curl --proto '=https' --tlsv1.2 -sSf $GITHUB_RAW_BASE/bin/setup_consul_aws_ami.sh | bash -s -- $node_args" &
+        ssh_run "$node" "curl --proto '=https' --tlsv1.2 -sSf $GITHUB_RAW_BASE/bin/instance/setup_consul_aws_ami.sh | bash -s -- $node_args" &
         pids+=($!)
     done
 
@@ -192,7 +191,7 @@ install_nomad() {
     for node in "${NODES[@]}"; do
         log_info "Starting Nomad install on $node..."
         # Using ADD_USER_TO_DOCKER=yes for non-interactive mode
-        ssh_run "$node" "export ADD_USER_TO_DOCKER=yes && curl --proto '=https' --tlsv1.2 -sSf $GITHUB_RAW_BASE/bin/setup_nomad_aws_ami.sh | bash -s -- $node_args" &
+        ssh_run "$node" "export ADD_USER_TO_DOCKER=yes && curl --proto '=https' --tlsv1.2 -sSf $GITHUB_RAW_BASE/bin/instance/setup_nomad_aws_ami.sh | bash -s -- $node_args" &
         pids+=($!)
     done
 
@@ -243,18 +242,20 @@ configure_consul() {
     local first_node="${NODES[0]}"
 
     # Download Consul config files to first node from GitHub
-    # Note: ingress-gateway routing is defined in the Nomad job (ingress-gateway.hcl),
+    # Note: ingress-gateway routing is defined in the Nomad job,
     # not in a separate Consul config entry, to avoid conflicts
     log_info "Downloading Consul config files to $first_node..."
     local consul_files=(
-        web-service-defaults.hcl
-        business-service-defaults.hcl
-        business-service-api-defaults.hcl
-        business-service-router.hcl
-        web-service-intentions.hcl
+        "services/web-service/defaults.consul.hcl"
+        "services/business-service/defaults.consul.hcl"
+        "services/business-service-api/defaults.consul.hcl"
+        "services/business-service/router.consul.hcl"
+        "services/web-service/intentions.consul.hcl"
     )
     for file in "${consul_files[@]}"; do
-        ssh_run "$first_node" "wget -q -O $file $GITHUB_RAW_BASE/jobs/$file"
+        local dir=$(dirname "$file")
+        local basename=$(basename "$file")
+        ssh_run "$first_node" "mkdir -p $dir && wget -q -O $file $GITHUB_RAW_BASE/$file"
     done
 
     # Apply Consul configurations
@@ -287,22 +288,24 @@ run_nomad_jobs() {
 
     # Nomad job files (order matters: traefik first, then ingress, then services)
     local nomad_jobs=(
-        traefik-rewrite.hcl
-        ingress-gateway.hcl
-        web-service.hcl
-        business-service.hcl
+        "infrastructure/traefik-rewrite/job.nomad.hcl"
+        "infrastructure/ingress-gateway/job.nomad.hcl"
+        "services/web-service/job.nomad.hcl"
+        "services/business-service/job.nomad.hcl"
     )
 
     # Download Nomad job files from GitHub
     log_info "Downloading Nomad job files to $first_node..."
     for file in "${nomad_jobs[@]}"; do
-        ssh_run "$first_node" "wget -q -O $file $GITHUB_RAW_BASE/jobs/$file"
+        local dir=$(dirname "$file")
+        ssh_run "$first_node" "mkdir -p $dir && wget -q -O $file $GITHUB_RAW_BASE/$file"
     done
 
     # Run jobs in order
     log_info "Running Nomad jobs..."
     for file in "${nomad_jobs[@]}"; do
-        log_info "Starting ${file%.hcl}..."
+        local name=$(basename $(dirname "$file"))
+        log_info "Starting $name..."
         ssh_run "$first_node" "nomad job run $file"
         sleep 5
     done
@@ -480,7 +483,7 @@ download_demo_files() {
     )
     log_info "Downloading shell scripts to $first_node..."
     for file in "${scripts[@]}"; do
-        ssh_run "$first_node" "wget -q -O $file $GITHUB_RAW_BASE/bin/$file && chmod +x $file"
+        ssh_run "$first_node" "wget -q -O $file $GITHUB_RAW_BASE/bin/instance/$file && chmod +x $file"
     done
 
     log_success "Demo files downloaded"

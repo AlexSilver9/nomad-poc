@@ -46,10 +46,10 @@ for instance_id in "${instance_ids[@]}"; do
 done
 
 echo "Command to install Consul on EC2 instances:"
-echo "curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/setup_consul_aws_ami.sh | sh"
+echo "curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/instance/setup_consul_aws_ami.sh | sh"
 
 echo "Command to install Nomad on EC2 instances:"
-echo "curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/setup_nomad_aws_ami.sh | sh"
+echo "curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/instance/setup_nomad_aws_ami.sh | sh"
 
 echo "Public DNS names of the EC2 instances:"
 ./get_public_dns_names.sh

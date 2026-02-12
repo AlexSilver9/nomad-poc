@@ -9,7 +9,7 @@ set -euo pipefail
 # Usage interactive:
 #   ./setup_consul_aws_ami.sh  (prompts for node addresses)
 # Usage from repo:
-#   curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/setup_consul_aws_ami.sh | sh
+#   curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/instance/setup_consul_aws_ami.sh | sh
 
 # Variables
 CONSUL_SYSTEMD_CONFIG="/usr/lib/systemd/system/consul.service"

@@ -6,12 +6,12 @@ This guide explains where to configure different aspects of the Nomad/Consul ser
 
 | Configuration | File | When to Use |
 |--------------|------|-------------|
-| **Ingress Gateway routing** (hosts, services) | `aws/jobs/ingress-gateway.hcl` | Add/remove services exposed through the gateway |
-| **Service protocol** (http/tcp/grpc) | `aws/jobs/*-defaults.hcl` | When adding a new service to the mesh |
-| **Service-to-service routing** (path-based) | `aws/jobs/*-router.hcl` | Route different paths to different service subsets |
-| **Service authorization** (intentions) | `aws/jobs/*-intentions.hcl` | Allow/deny which sources can send traffic to a service |
-| **URL rewrites** (regex transforms) | `aws/jobs/traefik-rewrite.hcl` | Complex URL transformations before hitting Envoy |
-| **Service deployment** (containers, resources) | `aws/jobs/*-service.hcl` | Deploy/update application containers |
+| **Ingress Gateway routing** (hosts, services) | `aws/infrastructure/ingress-gateway/job.nomad.hcl` | Add/remove services exposed through the gateway |
+| **Service protocol** (http/tcp/grpc) | `aws/services/*/defaults.consul.hcl` | When adding a new service to the mesh |
+| **Service-to-service routing** (path-based) | `aws/services/*/router.consul.hcl` | Route different paths to different service subsets |
+| **Service authorization** (intentions) | `aws/services/*/intentions.consul.hcl` | Allow/deny which sources can send traffic to a service |
+| **URL rewrites** (regex transforms) | `aws/infrastructure/traefik-rewrite/job.nomad.hcl` | Complex URL transformations before hitting Envoy |
+| **Service deployment** (containers, resources) | `aws/services/*/job.nomad.hcl` | Deploy/update application containers |
 
 
 ## Detailed Configuration

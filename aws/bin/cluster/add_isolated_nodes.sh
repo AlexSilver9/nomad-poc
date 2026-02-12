@@ -1,16 +1,19 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-# Add client-only nodes to an existing Nomad cluster.
+# Add isolated client nodes to an existing Nomad cluster using a dedicated node pool.
+# Jobs assigned to this pool run ONLY on these nodes, and no other jobs run here.
+#
 # Creates EC2 instances, installs Consul + Nomad (client mode), registers with ALB.
 # Requires: aws-cli, jq, SSH key at ~/workspace/nomad/nomad-keypair.pem
-# Usage: ./add_client_nodes.sh [count]  (default: 1)
+# Usage: ./add_isolated_nodes.sh [count]  (default: 1)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SSH_KEY="${SSH_KEY:-$HOME/workspace/nomad/nomad-keypair.pem}"
 SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10"
 TARGET_GROUP_NAME="nomad-target-group"
 TARGET_PORT=8081
+NODE_POOL="sensitive-node-pool"
 GITHUB_RAW_BASE="https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws"
 
 COUNT="${1:-1}"
@@ -31,18 +34,24 @@ if [[ -z "$SERVER_NODES" ]]; then
     exit 1
 fi
 echo "Server nodes: $SERVER_NODES"
+FIRST_SERVER=$(echo "$SERVER_NODES" | awk '{print $1}')
 
-# Determine next client number
-EXISTING_CLIENTS=$(aws ec2 describe-instances \
-    --filters "Name=tag:Name,Values=nomad-client*" "Name=instance-state-name,Values=running" \
+# Create node pool on the cluster
+echo "Creating node pool '$NODE_POOL'..."
+ssh $SSH_OPTS -i "$SSH_KEY" ec2-user@"$FIRST_SERVER" \
+    "wget -q -O $NODE_POOL.hcl $GITHUB_RAW_BASE/jobs/$NODE_POOL.hcl && nomad node pool apply $NODE_POOL.hcl"
+
+# Determine next node number
+EXISTING=$(aws ec2 describe-instances \
+    --filters "Name=tag:Name,Values=nomad-isolated*" "Name=instance-state-name,Values=running" \
     --query 'Reservations[].Instances[].Tags[?Key==`Name`].Value' --output text | wc -w || echo "0")
-START_NUM=$((EXISTING_CLIENTS + 1))
-echo "Creating $COUNT client node(s) starting from nomad-client$START_NUM..."
+START_NUM=$((EXISTING + 1))
+echo "Creating $COUNT isolated node(s) starting from nomad-isolated$START_NUM..."
 
 # Create instances
 INSTANCE_IDS=()
 for i in $(seq "$START_NUM" $((START_NUM + COUNT - 1))); do
-    name="nomad-client$i"
+    name="nomad-isolated$i"
     echo "Creating $name..."
 
     result=$(aws ec2 run-instances \
@@ -51,7 +60,7 @@ for i in $(seq "$START_NUM" $((START_NUM + COUNT - 1))); do
         --key-name 'nomad-keypair' \
         --network-interfaces '{"SubnetId":"subnet-3ee53954","AssociatePublicIpAddress":true,"DeviceIndex":0,"Groups":["sg-07fee22cbcdad4c58","sg-09aa7199da65ed0e3","sg-0beaa6c98d73ebd3b","sg-08e51d2a581377e0b","sg-77476f14"]}' \
         --credit-specification '{"CpuCredits":"unlimited"}' \
-        --tag-specifications '{"ResourceType":"instance","Tags":[{"Key":"Name","Value":"'"$name"'"},{"Key":"Role","Value":"nomad-client"}]}' \
+        --tag-specifications '{"ResourceType":"instance","Tags":[{"Key":"Name","Value":"'"$name"'"},{"Key":"Role","Value":"nomad-isolated"}]}' \
         --metadata-options '{"HttpEndpoint":"enabled","HttpPutResponseHopLimit":2,"HttpTokens":"required"}' \
         --private-dns-name-options '{"HostnameType":"ip-name","EnableResourceNameDnsARecord":false,"EnableResourceNameDnsAAAARecord":false}' \
         --count '1')
@@ -84,21 +93,31 @@ for dns in "${CLIENT_DNS[@]}"; do
     echo " $dns ready"
 done
 
-# Install Consul + Nomad (client-only) on each node
-echo "Installing Consul and Nomad on client nodes..."
+# Install Consul (client-only)
+echo "Installing Consul on isolated nodes..."
 for dns in "${CLIENT_DNS[@]}"; do
-    echo "Installing on $dns..."
+    echo "Installing Consul on $dns..."
     ssh $SSH_OPTS -i "$SSH_KEY" ec2-user@"$dns" \
-        "curl --proto '=https' --tlsv1.2 -sSf $GITHUB_RAW_BASE/bin/setup_consul_client.sh | bash -s -- $SERVER_NODES" &
+        "curl --proto '=https' --tlsv1.2 -sSf $GITHUB_RAW_BASE/bin/instance/setup_consul_client.sh | bash -s -- $SERVER_NODES" &
 done
 wait
 
+# Install Nomad (client-only)
+echo "Installing Nomad on isolated nodes..."
 for dns in "${CLIENT_DNS[@]}"; do
     echo "Installing Nomad on $dns..."
     ssh $SSH_OPTS -i "$SSH_KEY" ec2-user@"$dns" \
-        "curl --proto '=https' --tlsv1.2 -sSf $GITHUB_RAW_BASE/bin/setup_nomad_client.sh | ADD_USER_TO_DOCKER=yes bash -s -- $SERVER_NODES" &
+        "curl --proto '=https' --tlsv1.2 -sSf $GITHUB_RAW_BASE/bin/instance/setup_nomad_client.sh | ADD_USER_TO_DOCKER=yes bash -s -- $SERVER_NODES" &
 done
 wait
+
+# Configure node_pool on each node
+echo "Configuring node pool '$NODE_POOL' on isolated nodes..."
+for dns in "${CLIENT_DNS[@]}"; do
+    ssh $SSH_OPTS -i "$SSH_KEY" ec2-user@"$dns" "
+sudo sed -i '/^client {/a\\  node_pool = \"$NODE_POOL\"\n\n  meta {\n    workload_type = \"sensitive-workloads\"\n  }' /etc/nomad.d/nomad.hcl
+sudo systemctl restart nomad"
+done
 
 # Register with target group
 echo "Registering instances with target group..."
@@ -118,7 +137,8 @@ fi
 
 echo ""
 echo "=============================================="
-echo "  Done. Created $COUNT client node(s)"
+echo "  Done. Created $COUNT isolated node(s)"
+echo "  Node pool: $NODE_POOL"
 echo "=============================================="
 echo ""
 echo "SSH to server nodes:"
@@ -126,7 +146,7 @@ for node in $SERVER_NODES; do
     echo "  ssh -o StrictHostKeyChecking=accept-new -i $SSH_KEY ec2-user@$node"
 done
 echo ""
-echo "SSH to client nodes:"
+echo "SSH to isolated nodes:"
 for i in "${!CLIENT_DNS[@]}"; do
     echo "  ssh -o StrictHostKeyChecking=accept-new -i $SSH_KEY ec2-user@${CLIENT_DNS[$i]}"
 done
@@ -136,14 +156,14 @@ if [[ -n "$ALB_DNS" && "$ALB_DNS" != "None" ]]; then
     echo "ALB DNS: $ALB_DNS"
     echo ""
 fi
-FIRST_SERVER=$(echo "$SERVER_NODES" | awk '{print $1}')
 echo "UIs:"
 echo "  Nomad:  http://$FIRST_SERVER:4646"
 echo "  Consul: http://$FIRST_SERVER:8500"
 echo ""
 echo "Verify commands:"
-echo "  nomad node status                    # Show all nodes (run from any server)"
+echo "  nomad node pool list                 # Show all node pools"
+echo "  nomad node status                    # Show all nodes (check DC/Pool column)"
 echo "  consul members                       # Show Consul cluster members"
-echo "  nomad node status -self              # Run on client node to check self"
-echo "  journalctl -u nomad.service -f       # Follow Nomad logs on client node"
-echo "  journalctl -u consul.service -f      # Follow Consul logs on client node"
+echo ""
+echo "To run a job on this pool, add to the job spec:"
+echo "  node_pool = \"$NODE_POOL\""

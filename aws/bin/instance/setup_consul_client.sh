@@ -9,7 +9,7 @@ set -euo pipefail
 # Usage interactive:
 #   ./setup_consul_client.sh  (prompts for server addresses)
 # Usage from repo:
-#   curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/setup_consul_client.sh | sh
+#   curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/instance/setup_consul_client.sh | sh
 
 # Read server node addresses from arguments or interactively
 nodes=()

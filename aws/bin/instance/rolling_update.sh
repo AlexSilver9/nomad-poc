@@ -10,31 +10,32 @@ set -euo pipefail
 #
 # Usage: ./rolling_update.sh
 
-GITHUB_RAW_BASE="https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs"
-JOB_FILE="rolling-update-service.hcl"
+GITHUB_RAW_BASE="https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws"
+JOB_FILE="services/rolling-update-service/job.nomad.hcl"
 JOB_NAME="rolling-update-service"
 OLD_IMAGE="traefik/whoami:v1.10.0"
 NEW_IMAGE="traefik/whoami:v1.11.0"
 
 # Step 1: Download required files from GitHub
 echo "=== STEP 1: Download required files ==="
+mkdir -p services/rolling-update-service infrastructure/ingress-gateway
 wget -q -O "$JOB_FILE" "$GITHUB_RAW_BASE/$JOB_FILE"
-wget -q -O rolling-update-service-defaults.hcl "$GITHUB_RAW_BASE/rolling-update-service-defaults.hcl"
-wget -q -O rolling-update-service-intentions.hcl "$GITHUB_RAW_BASE/rolling-update-service-intentions.hcl"
-wget -q -O ingress-gateway.hcl "$GITHUB_RAW_BASE/ingress-gateway.hcl"
-wget -q -O ingress-gateway-with-rolling-update.hcl "$GITHUB_RAW_BASE/ingress-gateway-with-rolling-update.hcl"
+wget -q -O services/rolling-update-service/defaults.consul.hcl "$GITHUB_RAW_BASE/services/rolling-update-service/defaults.consul.hcl"
+wget -q -O services/rolling-update-service/intentions.consul.hcl "$GITHUB_RAW_BASE/services/rolling-update-service/intentions.consul.hcl"
+wget -q -O infrastructure/ingress-gateway/job.nomad.hcl "$GITHUB_RAW_BASE/infrastructure/ingress-gateway/job.nomad.hcl"
+wget -q -O infrastructure/ingress-gateway/with-rolling-update.nomad.hcl "$GITHUB_RAW_BASE/infrastructure/ingress-gateway/with-rolling-update.nomad.hcl"
 echo "Downloaded job, Consul config, and ingress gateway files"
 
 read -p "Press Enter to apply Consul configurations and update ingress gateway..."
 
 # Step 2: Apply Consul configurations and update ingress gateway
 echo "=== STEP 2: Apply Consul configurations ==="
-consul config write rolling-update-service-defaults.hcl
-consul config write rolling-update-service-intentions.hcl
+consul config write services/rolling-update-service/defaults.consul.hcl
+consul config write services/rolling-update-service/intentions.consul.hcl
 echo "Consul service-defaults and intentions applied"
 
 echo "=== Updating ingress gateway to include rolling-update-service ==="
-nomad job run ingress-gateway-with-rolling-update.hcl
+nomad job run infrastructure/ingress-gateway/with-rolling-update.nomad.hcl
 echo "Ingress gateway updated (waiting for Envoy to reload...)"
 sleep 5
 
@@ -97,6 +98,6 @@ consul config delete -kind service-intentions -name "$JOB_NAME" || true
 consul config delete -kind service-defaults -name "$JOB_NAME" || true
 
 echo "Restoring original ingress gateway..."
-nomad job run ingress-gateway.hcl
+nomad job run infrastructure/ingress-gateway/job.nomad.hcl
 
 echo "Done"

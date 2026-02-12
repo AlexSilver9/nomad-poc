@@ -332,7 +332,7 @@ If you need gradual traffic shifting (true canary with percentage-based rollout)
 
 ## See Also
 
-- [Rolling Update Demo](../aws/bin/rolling_update.sh) - Rolling update without traffic isolation
-- [Canary Update Demo](../aws/bin/canary_update.sh) - Canary update (traffic goes to all instances in OSS)
+- [Rolling Update Demo](../aws/bin/instance/rolling_update.sh) - Rolling update without traffic isolation
+- [Canary Update Demo](../aws/bin/instance/canary_update.sh) - Canary update (traffic goes to all instances in OSS)
 - [Nomad Update Stanza](https://developer.hashicorp.com/nomad/docs/job-specification/update)
 - [Consul Service Resolver](https://developer.hashicorp.com/consul/docs/connect/config-entries/service-resolver)

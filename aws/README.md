@@ -102,7 +102,7 @@ For service mesh capabilities, install Consul before Nomad:
 1. SSH into each instance and run the setup:
    ```shell
    ssh -i ~/workspace/nomad/nomad-keypair.pem ec2-user@<public-dns>
-   curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/setup_consul_aws_ami.sh | sh
+   curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/instance/setup_consul_aws_ami.sh | sh
    ```
 
 2. Paste the public DNS names of all instances from previously called `get_public_dns_names.sh`
@@ -117,7 +117,7 @@ For service mesh capabilities, install Consul before Nomad:
 1. SSH into each instance and run the setup:
    ```shell
    ssh -i ~/workspace/nomad/nomad-keypair.pem ec2-user@<public-dns>
-   curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/setup_nomad_aws_ami.sh | sh
+   curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/instance/setup_nomad_aws_ami.sh | sh
    ```
 
 2. Paste the public DNS names of all instances from previously called `get_public_dns_names.sh`
@@ -134,28 +134,34 @@ For service mesh capabilities, install Consul before Nomad:
 
 1. SSH into any instance and download the Nomad job definitions and Consul config entries
    ```shell
+   GITHUB_RAW_BASE="https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws"
+
+   # Create directory structure
+   mkdir -p infrastructure/ingress-gateway infrastructure/traefik-rewrite infrastructure/nginx-rewrite
+   mkdir -p services/web-service services/business-service services/business-service-api
+
    # Nomad jobs
-   wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/traefik-rewrite.hcl
-   wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/nginx-rewrite.hcl # optional for nginx instead Traefik
-   wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/ingress-gateway.hcl
-   wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/web-service.hcl
-   wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/business-service.hcl
+   wget -O infrastructure/traefik-rewrite/job.nomad.hcl $GITHUB_RAW_BASE/infrastructure/traefik-rewrite/job.nomad.hcl
+   wget -O infrastructure/nginx-rewrite/job.nomad.hcl $GITHUB_RAW_BASE/infrastructure/nginx-rewrite/job.nomad.hcl  # optional
+   wget -O infrastructure/ingress-gateway/job.nomad.hcl $GITHUB_RAW_BASE/infrastructure/ingress-gateway/job.nomad.hcl
+   wget -O services/web-service/job.nomad.hcl $GITHUB_RAW_BASE/services/web-service/job.nomad.hcl
+   wget -O services/business-service/job.nomad.hcl $GITHUB_RAW_BASE/services/business-service/job.nomad.hcl
 
    # Consul config entries
-   wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/web-service-defaults.hcl
-   wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/web-service-intentions.hcl
-   wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/business-service-defaults.hcl
-   wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/business-service-api-defaults.hcl
-   wget https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/jobs/business-service-router.hcl
+   wget -O services/web-service/defaults.consul.hcl $GITHUB_RAW_BASE/services/web-service/defaults.consul.hcl
+   wget -O services/web-service/intentions.consul.hcl $GITHUB_RAW_BASE/services/web-service/intentions.consul.hcl
+   wget -O services/business-service/defaults.consul.hcl $GITHUB_RAW_BASE/services/business-service/defaults.consul.hcl
+   wget -O services/business-service-api/defaults.consul.hcl $GITHUB_RAW_BASE/services/business-service-api/defaults.consul.hcl
+   wget -O services/business-service/router.consul.hcl $GITHUB_RAW_BASE/services/business-service/router.consul.hcl
    ```
 
 2. Configure Consul config entries (service-defaults, intentions, router)
    ```shell
-   consul config write web-service-defaults.hcl
-   consul config write business-service-defaults.hcl
-   consul config write business-service-api-defaults.hcl
-   consul config write business-service-router.hcl
-   consul config write web-service-intentions.hcl
+   consul config write services/web-service/defaults.consul.hcl
+   consul config write services/business-service/defaults.consul.hcl
+   consul config write services/business-service-api/defaults.consul.hcl
+   consul config write services/business-service/router.consul.hcl
+   consul config write services/web-service/intentions.consul.hcl
 
    # Verify:
    consul config read -kind service-defaults -name web-service
@@ -167,22 +173,22 @@ For service mesh capabilities, install Consul before Nomad:
 
 3. Start the Traefik URL rewrite layer (runs on all nodes)
    ```shell
-   nomad job run traefik-rewrite.hcl
+   nomad job run infrastructure/traefik-rewrite/job.nomad.hcl
    ```
 
 4. Start the Ingress-Gateway (runs on all nodes)
    ```shell
-   nomad job run ingress-gateway.hcl
+   nomad job run infrastructure/ingress-gateway/job.nomad.hcl
    ```
 
 5. Start the Web-Service
    ```shell
-   nomad job run web-service.hcl
+   nomad job run services/web-service/job.nomad.hcl
    ```
 
 6. Start the Business-Service (deploys both business-service and business-service-api)
    ```shell
-   nomad job run business-service.hcl
+   nomad job run services/business-service/job.nomad.hcl
    ```
 
 7. Test the routing
@@ -288,3 +294,6 @@ Create an ALB to route external traffic to Traefik:
 - sg-09aa7199da65ed0e3 (HTTP)
 - sg-0beaa6c98d73ebd3b (HTTPS)
 - sg-07fee22cbcdad4c58 (SSH)
+
+- https://github.appservices.mitel.com/build/nomad.git
+ 

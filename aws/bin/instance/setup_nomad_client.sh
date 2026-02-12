@@ -8,7 +8,7 @@ set -euo pipefail
 # Usage interactive:
 #   ./setup_nomad_client.sh  (prompts for server addresses)
 # Usage from repo:
-#   curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/setup_nomad_client.sh | sh
+#   curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/instance/setup_nomad_client.sh | sh
 
 CNI_VERSION="v1.4.0"
 ADD_USER_TO_DOCKER="${ADD_USER_TO_DOCKER:-}"  # Set to "yes" for non-interactive mode

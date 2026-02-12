@@ -35,7 +35,8 @@ aws/
 │       ├── canary_update.sh                # Demo: canary deployment
 │       ├── rolling_update.sh               # Demo: rolling update deployment
 │       ├── sensitive_service.sh            # Demo: sensitive service on isolated node pool
-│       └── node_drain.sh                   # Demo: graceful node drain
+│       ├── node_drain.sh                   # Demo: graceful node drain
+│       └── eval_system_jobs.sh            # Re-evaluate system jobs on newly eligible nodes
 ├── cluster/nomad/                          # Nomad agent configuration
 ├── infrastructure/                         # Platform/infrastructure components
 │   ├── ingress-gateway/

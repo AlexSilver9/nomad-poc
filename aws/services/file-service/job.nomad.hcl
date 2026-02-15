@@ -15,7 +15,7 @@ job "file-service" {
   type = "service"
 
   group "files" {
-    count = 3
+    count = 2
 
     volume "efs" {
       type   = "host"
@@ -56,7 +56,7 @@ job "file-service" {
 
       volume_mount {
         volume      = "efs"
-        destination = "/usr/share/nginx/html"
+        destination = "/data"
         read_only   = true
       }
 

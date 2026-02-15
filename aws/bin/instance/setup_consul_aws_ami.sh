@@ -54,10 +54,6 @@ sudo yum install -y unzip
 sudo yum install -y yum-utils
 sudo yum install -y shadow-utils
 
-# Print Host IP (for reference)
-echo "Host IP addresses:"
-ip a | grep inet
-
 # Download and install Consul
 sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
 sudo yum install -y consul

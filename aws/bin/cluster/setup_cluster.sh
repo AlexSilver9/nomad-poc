@@ -137,16 +137,16 @@ create_efs() {
 # STEP 3: Wait for instances to be ready and mount EFS
 #------------------------------------------------------------------------------
 wait_for_instances() {
-#    log_info "=== STEP 3: Waiting for instances to be ready ==="
-#
-#    for node in "${NODES[@]}"; do
-#        wait_for_ssh "$node"
-#    done
-#
-#    log_success "All instances are accessible via SSH"
-#
-#    # Mount EFS on all nodes
-#    log_info "Mounting EFS ($EFS_ID) on all nodes..."
+    log_info "=== STEP 3: Waiting for instances to be ready ==="
+
+    for node in "${NODES[@]}"; do
+        wait_for_ssh "$node"
+    done
+
+    log_success "All instances are accessible via SSH"
+
+    # Mount EFS on all nodes
+    log_info "Mounting EFS ($EFS_ID) on all nodes..."
 #    local pids=()
 #    for node in "${NODES[@]}"; do
 #        ssh_run "$node" "curl --proto '=https' --tlsv1.2 -sSf $GITHUB_RAW_BASE/bin/instance/mount_efs.sh | bash -s -- $EFS_ID" &

@@ -55,8 +55,8 @@ job "file-service" {
       driver = "docker"
 
       volume_mount {
-        volume      = "efs"
-        destination = "/data"
+        volume      = "data"
+        destination = "/usr/share/nginx/html"
         read_only   = true
       }
 

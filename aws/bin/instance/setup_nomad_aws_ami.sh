@@ -73,10 +73,7 @@ sudo yum install -y unzip
 sudo yum install -y yum-utils
 sudo yum install -y shadow-utils
 
-# Print Host IP (for reference)
-ip a | grep inet
-
-# Verify Nomad cgroup v2 pre-requisites (same check — assuming cgroup v2 environment)
+s# Verify Nomad cgroup v2 pre-requisites (same check — assuming cgroup v2 environment)
 echo "Checking cgroup controllers (should show cpuset, cpu, io, memory, pids):"
 cat /sys/fs/cgroup/cgroup.controllers | grep -E 'cpuset|cpu|io|memory|pids' || echo "Warning: Some controllers missing — check kernel config"
 

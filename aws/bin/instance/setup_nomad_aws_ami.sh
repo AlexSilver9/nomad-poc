@@ -139,6 +139,19 @@ fi
 sudo chown -R $nomad_user:$nomad_group /opt/nomad/alloc_mounts
 sudo chmod 750 /opt/nomad/alloc_mounts
 
+# TODO: Use AWS EFS
+# Create data dir as surrogate of AWS EFS
+sudo mkdir /data
+
+# Create a index html file in data dir to be used by file-service
+sudo tee /data/index.html > /dev/null <<EOF
+<head>
+</head>
+<body
+  <h1>Hello Cluster</h1>
+</body>
+EOF
+
 # Create Nomad config
 sudo tee /etc/nomad.d/nomad.hcl > /dev/null <<EOF
 data_dir = "/opt/nomad/data"
@@ -174,7 +187,7 @@ ${servers}
   ]
 
   host_volume "efs" {
-    path      = "/mnt/efs"
+    path      = "/data"
     read_only = false
   }
 }

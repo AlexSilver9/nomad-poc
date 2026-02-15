@@ -16,10 +16,9 @@
 - Node-Schwenk
 - Node drain per UI? -> YES
 - Node drain -> startet erst neue Allocs auf anderer Instanz und drained dann
-
+- File Organization
 
 # TODO:
-- File Organization
 - Volumes (EFS / lokaler flüchtiger Storage / CSI)
 - ACLs + TLS
 - Nomad Binary Update

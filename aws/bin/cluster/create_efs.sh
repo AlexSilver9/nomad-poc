@@ -11,7 +11,7 @@ command -v jq &>/dev/null || { echo "Error: jq required"; exit 1; }
 
 EFS_NAME="nomad-efs"
 SUBNET_ID="subnet-3ee53954"
-SECURITY_GROUP="sg-77476f14"
+SECURITY_GROUP="sg-08e51d2a581377e0b"
 
 # Check if EFS with this name already exists
 EXISTING=$(aws efs describe-file-systems \

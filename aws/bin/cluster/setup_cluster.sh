@@ -526,6 +526,7 @@ download_demo_files() {
         sensitive_service.sh
         node_drain.sh
         eval_system_jobs.sh
+        file-service.sh
     )
     log_info "Downloading shell scripts to $first_node..."
     for file in "${scripts[@]}"; do

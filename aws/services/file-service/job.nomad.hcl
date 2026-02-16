@@ -8,7 +8,7 @@
 # The traffic flow:
 # Client → :8080 → Ingress Gateway → Envoy Sidecar → file-service container
 #
-# Requires: EFS mounted on host at /mnt/efs (via host_volume "efs" in Nomad client config)
+# Requires: EFS mounted on host (via host_volume "data" in Nomad client config)
 
 job "file-service" {
   datacenters = ["dc1"]
@@ -17,9 +17,9 @@ job "file-service" {
   group "files" {
     count = 2
 
-    volume "efs" {
+    volume "data" {
       type   = "host"
-      source = "efs"
+      source = "data"
     }
 
     network {

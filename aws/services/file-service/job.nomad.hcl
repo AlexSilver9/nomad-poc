@@ -26,7 +26,7 @@ job "file-service" {
       mode = "bridge"
 
       port "http" {
-        to = 8080
+        to = 80
       }
     }
 
@@ -45,7 +45,7 @@ job "file-service" {
       connect {
         sidecar_service {
           proxy {
-            local_service_port = 8080
+            local_service_port = 80
           }
         }
       }

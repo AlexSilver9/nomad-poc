@@ -271,17 +271,17 @@ Alternativen: Traeffik oder Nginx
                                    │
            ┌───────────────────────┼───────────────────────┐
            ▼                       ▼                       ▼
-   ┌───────────────┐       ┌───────────────┐       ┌───────────────┐
-   │   nomad1      │       │   nomad2      │       │   nomad3      │  <-- Nomad Cluster
-   │---------------│       │---------------│       │---------------|
-   │ Traefik:8081  │       │ Traefik:8081  │       │ Traefik:8081  │  <-- URL Rewrite
-   │      ↓        │       │      ↓        │       │      ↓        │
-   │ Envoy:8080    │       │ Envoy:8080    │       │ Envoy:8080    │  <-- Ingress
-   │      ↓        │       │      ↓        │       │      ↓        │
-   │   Sidecar     │       │   Sidecar     │       │   Sidecar     │  <-- Local Proxy
-   │      ↓        │       │      ↓        │       │      ↓        │
-   │   Service     │       │   Service     │       │   Service     │  <-- Application
-   └───────────────┘       └───────────────┘       └───────────────┘
+   ┌──────────────┐       ┌───────────────┐       ┌──────────────┐
+   │    nomad1    │       │    nomad2     │       │    nomad3    │  <-- Nomad Cluster
+   │--------------│       │---------------│       │--------------|
+   │  Nginx:8081  │       │  Nginxx:8081  │       │  Nginx:8081  │  <-- URL Rewrite
+   │      ↓       │       │      ↓        │       │      ↓       │
+   │ Envoy:8080   │       │ Envoy:8080    │       │ Envoy:8080   │  <-- Ingress-Gateway
+   │      ↓       │       │      ↓        │       │      ↓       │
+   │   Sidecar    │       │   Sidecar     │       │   Sidecar    │  <-- Local Proxy
+   │      ↓       │       │      ↓        │       │      ↓       │
+   │   Service    │       │   Service     │       │   Service    │  <-- Application
+   └──────────────┘       └───────────────┘       └──────────────┘
 ```
 
 

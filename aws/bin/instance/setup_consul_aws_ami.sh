@@ -68,11 +68,14 @@ sudo mkdir -p /opt/consul/data
 sudo chown -R consul:consul /opt/consul
 sudo chmod 750 /opt/consul
 
+# Determine bind address from default route (avoids ambiguity with Docker bridge etc.)
+NODE_IP="$(ip route get 1 | awk '{print $7; exit}')"
+
 # Create Consul config
 sudo tee /etc/consul.d/consul.hcl > /dev/null <<EOF
 datacenter = "dc1"
 data_dir = "/opt/consul/data"
-bind_addr = "0.0.0.0"
+bind_addr = "${NODE_IP}"
 client_addr = "0.0.0.0"
 
 # Cluster configuration

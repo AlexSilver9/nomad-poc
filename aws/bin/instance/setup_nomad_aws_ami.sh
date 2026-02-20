@@ -155,7 +155,7 @@ sudo chmod a+r /data/*
 
 
 # Determine bind address from default route (avoids ambiguity with Docker bridge etc.)
-NODE_IP="$(ip route get 1 | awk '{print $7; exit}')"
+NODE_IP="$(/sbin/ip route get 1 | awk '{print $7; exit}')"
 
 # Create Nomad config
 sudo tee /etc/nomad.d/nomad.hcl > /dev/null <<EOF

@@ -69,7 +69,7 @@ sudo chown -R consul:consul /opt/consul
 sudo chmod 750 /opt/consul
 
 # Determine bind address from default route (avoids ambiguity with Docker bridge etc.)
-NODE_IP="$(ip route get 1 | awk '{print $7; exit}')"
+NODE_IP="$(/sbin/ip route get 1 | awk '{print $7; exit}')"
 
 # Create Consul config
 sudo tee /etc/consul.d/consul.hcl > /dev/null <<EOF

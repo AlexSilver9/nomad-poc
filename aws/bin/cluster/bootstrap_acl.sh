@@ -22,8 +22,6 @@ SH_KEY="${SSH_KEY:-$HOME/workspace/nomad/nomad-keypair.pem}"
 SSH_USER="ec2-user"
 SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o LogLevel=ERROR"
 REMOTE_HOME="/home/$SSH_USER"
-
-# Policy files are fetched on the remote node via wget from GitHub.
 GITHUB_RAW="https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main"
 CONSUL_POLICIES_URL="$GITHUB_RAW/aws/acl/consul/policies"
 NOMAD_POLICIES_URL="$GITHUB_RAW/aws/acl/nomad/policies"
@@ -162,7 +160,7 @@ CONSUL_NOMAD_TOKEN=""  # set inside the block below; checked before Phase 2
 if [[ "$CONSUL_MGMT_TOKEN" != "<already-bootstrapped>" ]]; then
   echo "  Consul management token captured."
 
-  echo "  Applying Consul policies (wget from GitHub)..."
+  echo "  Applying Consul policies..."
   ssh_exec "$BOOTSTRAP_NODE" "
     wget -qO ${REMOTE_HOME}/agent.policy.hcl '${CONSUL_POLICIES_URL}/agent.policy.hcl'
     CONSUL_HTTP_TOKEN='$CONSUL_MGMT_TOKEN' consul acl policy create \
@@ -229,16 +227,18 @@ for node in "${NODES[@]}"; do
   sleep 8
 done
 
-echo "  Waiting for Nomad cluster to stabilise..."
+echo "  Waiting for Nomad to be active on all nodes..."
 for i in {1..12}; do
-  alive=$(ssh_exec "$BOOTSTRAP_NODE" \
-    "nomad server members 2>/dev/null | { grep -c alive || true; }" || echo 0)
+  alive=0
+  for node in "${NODES[@]}"; do
+    ssh_exec "$node" "systemctl is-active --quiet nomad" 2>/dev/null && ((alive++)) || true
+  done
   if [[ "$alive" -ge "${#NODES[@]}" ]]; then
-    echo "  All $alive nodes alive."
+    echo "  All $alive nodes active."
     break
   fi
-  [[ "$i" -eq 12 ]] && { echo "Error: Nomad cluster did not stabilise after restart"; exit 1; }
-  echo "  Waiting... ($alive/${#NODES[@]} alive)"
+  [[ "$i" -eq 12 ]] && { echo "Error: Nomad did not stabilise after restart"; exit 1; }
+  echo "  Waiting... ($alive/${#NODES[@]} active)"
   sleep 5
 done
 
@@ -254,7 +254,7 @@ NOMAD_MGMT_TOKEN=$(nomad_bootstrap "$BOOTSTRAP_NODE")
 if [[ "$NOMAD_MGMT_TOKEN" != "<already-bootstrapped>" ]]; then
   echo "  Nomad management token captured."
 
-  echo "  Applying Nomad policies (wget from GitHub)..."
+  echo "  Applying Nomad policies..."
   ssh_exec "$BOOTSTRAP_NODE" "
     wget -qO ${REMOTE_HOME}/deployer.policy.hcl '${NOMAD_POLICIES_URL}/deployer.policy.hcl'
     NOMAD_TOKEN='$NOMAD_MGMT_TOKEN' nomad acl policy apply \
@@ -268,12 +268,12 @@ if [[ "$NOMAD_MGMT_TOKEN" != "<already-bootstrapped>" ]]; then
   echo "  Creating Nomad tokens..."
   NOMAD_DEPLOYER_TOKEN=$(ssh_exec "$BOOTSTRAP_NODE" \
     "NOMAD_TOKEN=$NOMAD_MGMT_TOKEN nomad acl token create \
-      -name=deployer -policy=deployer -type=client -format=json" \
+      -name=deployer -policy=deployer -type=client -json" \
     | jq -r '.SecretID')
 
   NOMAD_READONLY_TOKEN=$(ssh_exec "$BOOTSTRAP_NODE" \
     "NOMAD_TOKEN=$NOMAD_MGMT_TOKEN nomad acl token create \
-      -name=readonly -policy=readonly -type=client -format=json" \
+      -name=readonly -policy=readonly -type=client -json" \
     | jq -r '.SecretID')
 
   {

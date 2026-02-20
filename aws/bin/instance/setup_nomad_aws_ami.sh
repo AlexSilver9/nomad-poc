@@ -68,7 +68,6 @@ ask_user() {
 
 # Setup System
 sudo yum update -y
-sudo yum upgrade -y
 sudo yum install -y unzip
 sudo yum install -y yum-utils
 sudo yum install -y shadow-utils

@@ -12,6 +12,7 @@ set -euo pipefail
 
 # Variables
 NOMAD_SYSTEMD_CONFIG="/usr/lib/systemd/system/nomad.service"
+NOMAD_VERSION="1.11.2-1"
 CNI_VERSION="v1.4.0"
 ADD_USER_TO_DOCKER="${ADD_USER_TO_DOCKER:-}"  # Set to "yes" for non-interactive mode
 
@@ -80,7 +81,7 @@ sudo mkdir -p /opt/nomad/alloc_mounts     # Mounts for job allocations
 
 # Download and install Nomad binary
 sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
-sudo yum install -y nomad
+sudo yum install -y "nomad-${NOMAD_VERSION}"
 
 # Test if Nomad systemd unit can be modified
 if [[ ! -f "${NOMAD_SYSTEMD_CONFIG}" ]]; then

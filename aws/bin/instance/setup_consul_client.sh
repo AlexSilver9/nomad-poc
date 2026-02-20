@@ -11,6 +11,8 @@ set -euo pipefail
 # Usage from repo:
 #   curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/instance/setup_consul_client.sh | sh
 
+CONSUL_VERSION="1.22.3-1"
+
 # Read server node addresses from arguments or interactively
 nodes=()
 
@@ -47,7 +49,7 @@ sudo yum install -y yum-utils
 
 # Install Consul
 sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
-sudo yum install -y consul
+sudo yum install -y "consul-${CONSUL_VERSION}"
 
 # Create data directory
 sudo mkdir -p /opt/consul/data

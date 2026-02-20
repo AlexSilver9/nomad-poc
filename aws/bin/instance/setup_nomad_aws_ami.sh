@@ -159,8 +159,12 @@ NODE_IP="$(/sbin/ip route get 1 | awk '{print $7; exit}')"
 
 # Create Nomad config
 sudo tee /etc/nomad.d/nomad.hcl > /dev/null <<EOF
-data_dir = "/opt/nomad/data"
+data_dir  = "/opt/nomad/data"
 bind_addr = "${NODE_IP}"
+
+addresses {
+  http = "0.0.0.0"
+}
 
 plugin "docker" {
   config {

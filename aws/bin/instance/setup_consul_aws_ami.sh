@@ -13,6 +13,7 @@ set -euo pipefail
 
 # Variables
 CONSUL_SYSTEMD_CONFIG="/usr/lib/systemd/system/consul.service"
+CONSUL_VERSION="1.22.3-1"
 
 # Read cluster node addresses from arguments or interactively
 nodes=()
@@ -56,7 +57,7 @@ sudo yum install -y shadow-utils
 
 # Download and install Consul
 sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
-sudo yum install -y consul
+sudo yum install -y consul-${CONSUL_VERSION}
 
 # Test if Consul systemd unit exists
 if [[ ! -f "${CONSUL_SYSTEMD_CONFIG}" ]]; then

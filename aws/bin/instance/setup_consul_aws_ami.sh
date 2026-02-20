@@ -49,7 +49,6 @@ done
 retry_join=$(echo -e "$retry_join" | sed '$ s/,$//')
 
 # Setup System
-sudo yum update -y
 sudo yum install -y unzip
 sudo yum install -y yum-utils
 sudo yum install -y shadow-utils

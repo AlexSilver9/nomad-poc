@@ -43,7 +43,6 @@ done
 retry_join=$(echo -e "$retry_join" | sed '$ s/,$//')
 
 # Install dependencies
-sudo yum update -y
 sudo yum install -y yum-utils
 
 # Install Consul

@@ -103,3 +103,79 @@ Once all token consumers are configured, run from the local machine:
 ```
 
 The script prompts for confirmation, then updates `default_policy` from `"allow"` to `"deny"` in `/etc/consul.d/acl.hcl` on each node and does a rolling restart of Consul. Nomad ACL denies unauthenticated access by default — no change needed there.
+
+---
+
+## Recovery Procedures
+
+### Nomad: Recovering a Lost Management Token
+
+Nomad supports resetting the bootstrap state via a file placed on the **Raft leader before restart**. Existing policies and non-management tokens survive.
+
+**Step 1 — Get the reset index.**
+Run `nomad acl bootstrap` on any node. Even though it fails, the error includes the reset index:
+```
+Error bootstrapping: Unexpected response code: 400 (ACL bootstrap already done (reset index: 138))
+```
+
+**Step 2 — Identify the Raft leader.**
+On each server node, check the Nomad logs:
+```sh
+journalctl -u nomad | grep "cluster leadership acquired"
+```
+Only the current leader will show this. If you cannot determine the leader, write the file to all three nodes — the leader will process it.
+
+**Step 3 — Write the reset file on the leader.**
+```sh
+echo "138" | sudo tee /opt/nomad/data/server/acl-bootstrap-reset
+```
+
+**Step 4 — Restart Nomad on that node.**
+```sh
+sudo systemctl restart nomad
+```
+Nomad reads the file at startup, resets the bootstrap state, and deletes the file.
+
+**Step 5 — Re-bootstrap to get a new management token.**
+```sh
+nomad acl bootstrap
+```
+This succeeds and prints the new management token. Save it immediately.
+
+---
+
+### Consul: Recovering a Lost Management Token
+
+Consul has no reset-file mechanism equivalent to Nomad's. **Prevention is the right answer.**
+
+#### Prevention: `initial_management` token
+
+Before running `consul acl bootstrap` for the first time, add a pre-chosen UUID to `consul.hcl`:
+
+```hcl
+acl {
+  enabled = true
+  tokens {
+    initial_management = "00000000-0000-0000-0000-000000000001"
+  }
+}
+```
+
+When `consul acl bootstrap` runs, this becomes the management token. Since you chose the value, it can never be lost — store it in the password manager the same as any other credential. This project does not currently use this approach (we rely on saving the bootstrap output), but it is preferable for production.
+
+**Important**: `initial_management` is read exactly once — at bootstrap time. After that, the token lives in Raft and the config value has no effect. Changing or removing it from `consul.hcl` after bootstrapping does nothing to the active token. You can safely remove it from the config after bootstrapping to eliminate the static secret from disk.
+
+#### Recovery: Wipe Raft state (destructive)
+
+If the management token is truly lost and no `initial_management` token was configured, the only recovery is to wipe the Raft/FSM state on all server nodes. This destroys **all** ACL data (tokens, policies, service registrations stored in Raft) and requires re-running the full bootstrap procedure:
+
+```sh
+# On each server node — stop Consul first
+sudo systemctl stop consul
+sudo rm -rf /opt/consul/data/raft /opt/consul/data/serf
+sudo systemctl start consul
+# Wait for the cluster to reform, then:
+consul acl bootstrap
+```
+
+This is equivalent to starting from scratch. Do not do this in production without a maintenance window and full understanding of what will be lost.

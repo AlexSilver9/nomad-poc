@@ -16,11 +16,16 @@
 - Node-Schwenk
 - Node drain per UI? -> YES
 - Node drain -> startet erst neue Allocs auf anderer Instanz und drained dann
+
 - File Organization
+- Volumes (EFS / lokaler flüchtiger Storage / KEIN CSI)
+- ACLs (in between)
+- Nomad ACL lost token bootstrap (leader: nomad acl bootstrap -> sudo tee /opt/nomad/data/server/acl-bootstrap-reset -> restart)
+- Consul token generation or initial_management token
 
 # TODO:
-- Volumes (EFS / lokaler flüchtiger Storage / CSI)
-- ACLs + TLS
+
+- mTLS
 - Nomad Binary Update
     - https://developer.hashicorp.com/nomad/docs/upgrade
     - https://developer.hashicorp.com/nomad/docs/upgrade/upgrade-specific
@@ -44,7 +49,6 @@
 - Vault Secrets
     - https://developer.hashicorp.com/nomad/docs/secure/vault
 - Vault TLS
-- CSI (Container Storage Interface - Persistent Volume Mount - CSI Plugin Driver)
 - systemd Unit Update
 - node pools & constraints
 - Port Forwarding

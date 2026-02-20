@@ -18,7 +18,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ACL_DIR="$SCRIPT_DIR/../../acl"
-SH_KEY="${SSH_KEY:-$HOME/workspace/nomad/nomad-keypair.pem}"
+SSH_KEY="${SSH_KEY:-$HOME/workspace/nomad/nomad-keypair.pem}"
 SSH_USER="ec2-user"
 SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o LogLevel=ERROR"
 REMOTE_HOME="/home/$SSH_USER"
@@ -159,6 +159,8 @@ CONSUL_NOMAD_TOKEN=""  # set inside the block below; checked before Phase 2
 
 if [[ "$CONSUL_MGMT_TOKEN" != "<already-bootstrapped>" ]]; then
   echo "  Consul management token captured."
+  # Write immediately — before any subsequent command that could fail.
+  { echo "=== CONSUL TOKENS ==="; echo "Management Token : $CONSUL_MGMT_TOKEN"; } > "$TOKEN_OUTPUT"
 
   echo "  Applying Consul policies..."
   ssh_exec "$BOOTSTRAP_NODE" "
@@ -176,11 +178,13 @@ if [[ "$CONSUL_MGMT_TOKEN" != "<already-bootstrapped>" ]]; then
     "CONSUL_HTTP_TOKEN=$CONSUL_MGMT_TOKEN consul acl token create \
       -policy-name=agent -description='Consul agent token (all nodes)' -format=json" \
     | jq -r '.SecretID')
+  echo "Agent Token      : $CONSUL_AGENT_TOKEN" >> "$TOKEN_OUTPUT"
 
   CONSUL_NOMAD_TOKEN=$(ssh_exec "$BOOTSTRAP_NODE" \
     "CONSUL_HTTP_TOKEN=$CONSUL_MGMT_TOKEN consul acl token create \
       -policy-name=nomad-server -description='Nomad Consul integration token' -format=json" \
     | jq -r '.SecretID')
+  echo "Nomad Token      : $CONSUL_NOMAD_TOKEN" >> "$TOKEN_OUTPUT"
 
   echo "  Applying Consul agent token to all nodes..."
   for node in "${NODES[@]}"; do
@@ -188,13 +192,6 @@ if [[ "$CONSUL_MGMT_TOKEN" != "<already-bootstrapped>" ]]; then
     ssh_exec "$node" \
       "CONSUL_HTTP_TOKEN=$CONSUL_MGMT_TOKEN consul acl set-agent-token agent $CONSUL_AGENT_TOKEN"
   done
-
-  {
-    echo "=== CONSUL TOKENS ==="
-    echo "Management Token : $CONSUL_MGMT_TOKEN"
-    echo "Agent Token      : $CONSUL_AGENT_TOKEN"
-    echo "Nomad Token      : $CONSUL_NOMAD_TOKEN"
-  } > "$TOKEN_OUTPUT"
 fi
 
 # ─────────────────────────────────────────────────────────────
@@ -253,6 +250,8 @@ NOMAD_MGMT_TOKEN=$(nomad_bootstrap "$BOOTSTRAP_NODE")
 
 if [[ "$NOMAD_MGMT_TOKEN" != "<already-bootstrapped>" ]]; then
   echo "  Nomad management token captured."
+  # Write immediately — before any subsequent command that could fail.
+  { echo ""; echo "=== NOMAD TOKENS ==="; echo "Management Token : $NOMAD_MGMT_TOKEN"; } >> "$TOKEN_OUTPUT"
 
   echo "  Applying Nomad policies..."
   ssh_exec "$BOOTSTRAP_NODE" "
@@ -270,19 +269,13 @@ if [[ "$NOMAD_MGMT_TOKEN" != "<already-bootstrapped>" ]]; then
     "NOMAD_TOKEN=$NOMAD_MGMT_TOKEN nomad acl token create \
       -name=deployer -policy=deployer -type=client -json" \
     | jq -r '.SecretID')
+  echo "Deployer Token   : $NOMAD_DEPLOYER_TOKEN" >> "$TOKEN_OUTPUT"
 
   NOMAD_READONLY_TOKEN=$(ssh_exec "$BOOTSTRAP_NODE" \
     "NOMAD_TOKEN=$NOMAD_MGMT_TOKEN nomad acl token create \
       -name=readonly -policy=readonly -type=client -json" \
     | jq -r '.SecretID')
-
-  {
-    echo ""
-    echo "=== NOMAD TOKENS ==="
-    echo "Management Token : $NOMAD_MGMT_TOKEN"
-    echo "Deployer Token   : $NOMAD_DEPLOYER_TOKEN"
-    echo "Read-only Token  : $NOMAD_READONLY_TOKEN"
-  } >> "$TOKEN_OUTPUT"
+  echo "Read-only Token  : $NOMAD_READONLY_TOKEN" >> "$TOKEN_OUTPUT"
 fi
 
 # ─────────────────────────────────────────────────────────────

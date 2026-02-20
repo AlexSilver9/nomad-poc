@@ -1,0 +1,5 @@
+# Never commit token values
+*.token
+secrets.env
+tokens.txt
+bootstrap-output.txt

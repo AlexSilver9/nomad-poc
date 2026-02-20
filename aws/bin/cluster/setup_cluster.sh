@@ -515,14 +515,14 @@ wait_and_test_alb() {
 }
 
 #------------------------------------------------------------------------------
-# STEP 11: Download demo files (not run automatically)
+# STEP 11: Download additional scripts (not run automatically)
 #------------------------------------------------------------------------------
 download_demo_files() {
-    log_info "=== STEP 11: Downloading demo files ==="
+    log_info "=== STEP 11: Downloading additional scripts ==="
 
     local first_node="${NODES[0]}"
 
-    # Shell scripts for manual testing
+    # Shell scripts for extended capabilities
     local scripts=(
         rolling_update.sh
         canary_update.sh
@@ -530,13 +530,14 @@ download_demo_files() {
         node_drain.sh
         eval_system_jobs.sh
         file_service.sh
+        onboard_node.sh
     )
-    log_info "Downloading shell scripts to $first_node..."
+    log_info "Downloading additional scripts to $first_node..."
     for file in "${scripts[@]}"; do
         ssh_run "$first_node" "wget -q -O $file $GITHUB_RAW_BASE/bin/instance/$file && chmod +x $file"
     done
 
-    log_success "Demo files downloaded"
+    log_success "Additional scripts downloaded"
 }
 
 #------------------------------------------------------------------------------

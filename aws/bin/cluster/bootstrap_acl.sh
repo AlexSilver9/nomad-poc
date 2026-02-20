@@ -20,7 +20,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ACL_DIR="$SCRIPT_DIR/../../acl"
 SH_KEY="${SSH_KEY:-$HOME/workspace/nomad/nomad-keypair.pem}"
 SSH_USER="ec2-user"
-SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10"
+SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o LogLevel=ERROR"
 REMOTE_HOME="/home/$SSH_USER"
 
 # Policy files are fetched on the remote node via wget from GitHub.

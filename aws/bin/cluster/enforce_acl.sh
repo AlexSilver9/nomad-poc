@@ -15,7 +15,7 @@ set -euo pipefail
 
 SSH_KEY="${SSH_KEY:-$HOME/workspace/nomad/nomad-keypair.pem}"
 SSH_USER="ec2-user"
-SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10"
+SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o LogLevel=ERROR"
 
 command -v aws &>/dev/null || { echo "Error: aws-cli required"; exit 1; }
 command -v jq  &>/dev/null || { echo "Error: jq required"; exit 1; }

@@ -8,7 +8,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SSH_KEY="${SSH_KEY:-$HOME/workspace/nomad/nomad-keypair.pem}"
-SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10"
+SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o LogLevel=ERROR"
 TARGET_GROUP_NAME="nomad-target-group"
 ALB_NAME="nomad-alb"
 EFS_NAME="nomad-efs"
@@ -579,7 +579,7 @@ main() {
     echo ""
     echo "SSH to nodes:"
     for i in "${!NODES[@]}"; do
-        echo "  Node #$((i+1)): ssh -o StrictHostKeyChecking=accept-new -i $SSH_KEY ec2-user@${NODES[$i]}"
+        echo "  Node #$((i+1)): ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -i $SSH_KEY ec2-user@${NODES[$i]}"
     done
     echo ""
     echo "UIs:"

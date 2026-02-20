@@ -8,7 +8,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SSH_KEY="${SSH_KEY:-$HOME/workspace/nomad/nomad-keypair.pem}"
-SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10"
+SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o LogLevel=ERROR"
 TARGET_GROUP_NAME="nomad-target-group"
 TARGET_PORT=8081
 EFS_NAME="nomad-efs"
@@ -140,12 +140,12 @@ echo "=============================================="
 echo ""
 echo "SSH to server nodes:"
 for node in $SERVER_NODES; do
-    echo "  ssh -o StrictHostKeyChecking=accept-new -i $SSH_KEY ec2-user@$node"
+    echo "  ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -i $SSH_KEY ec2-user@$node"
 done
 echo ""
 echo "SSH to client nodes:"
 for i in "${!CLIENT_DNS[@]}"; do
-    echo "  ssh -o StrictHostKeyChecking=accept-new -i $SSH_KEY ec2-user@${CLIENT_DNS[$i]}"
+    echo "  ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -i $SSH_KEY ec2-user@${CLIENT_DNS[$i]}"
 done
 echo ""
 ALB_DNS=$(aws elbv2 describe-load-balancers --names nomad-alb --query 'LoadBalancers[0].DNSName' --output text 2>/dev/null || echo "")

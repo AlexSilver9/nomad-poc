@@ -6,6 +6,9 @@ set -euo pipefail
 #
 # Usage: ./create_efs.sh
 
+# Disable AWS CLI pager
+export AWS_PAGER=""
+
 command -v aws &>/dev/null || { echo "Error: aws-cli required"; exit 1; }
 command -v jq &>/dev/null || { echo "Error: jq required"; exit 1; }
 

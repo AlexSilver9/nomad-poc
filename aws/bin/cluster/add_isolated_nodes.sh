@@ -5,7 +5,7 @@ set -euo pipefail
 # Jobs assigned to this pool run ONLY on these nodes, and no other jobs run here.
 #
 # Creates EC2 instances, installs Consul + Nomad (client mode), registers with ALB.
-# Requires: aws-cli, jq, SSH key at ~/workspace/nomad/nomad-keypair.pem
+# Requires: aws-cli, jq, SSH_KEY env var point to nomad-keypair.pem or SSH key at ~/workspace/nomad/nomad-keypair.pem
 # Usage: ./add_isolated_nodes.sh [count]  (default: 1)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -5,7 +5,10 @@ set -euo pipefail
 # Requires: aws-cli, jq
 # Usage: ./aws_terminate_instances.sh
 
-# Check executable dependencies
+# Disable AWS CLI pager
+export AWS_PAGER=""
+
+# Check executable dependencies1
 command -v aws &>/dev/null || { echo "Error: aws-cli required"; exit 1; }
 command -v jq &>/dev/null || { echo "Error: jq required"; exit 1; }
 

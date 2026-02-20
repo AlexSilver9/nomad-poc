@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Full cluster setup script for AWS Nomad cluster with Consul service mesh.
 # Creates EC2 instances, installs Consul + Nomad, configures services, and creates ALB.
-# Requires: aws-cli, jq, SSH key at ~/workspace/nomad/nomad-keypair.pem
+# Requires: aws-cli, jq, SSH_KEY env var point to nomad-keypair.pem or SSH key at ~/workspace/nomad/nomad-keypair.pem
 # Usage: ./setup_cluster.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -98,7 +98,10 @@ create_instances() {
 
     # Get public DNS names
     log_info "Fetching instance DNS names..."
-    mapfile -t NODES < <("$SCRIPT_DIR/get_public_dns_names.sh")
+    NODES=()
+    while IFS= read -r line; do
+        NODES+=("$line")
+    done < <("$SCRIPT_DIR/get_public_dns_names.sh")
 
     if [[ ${#NODES[@]} -ne 3 ]]; then
         log_error "Expected 3 instances, found ${#NODES[@]}"

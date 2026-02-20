@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Add client-only nodes to an existing Nomad cluster.
 # Creates EC2 instances, installs Consul + Nomad (client mode), registers with ALB.
-# Requires: aws-cli, jq, SSH key at ~/workspace/nomad/nomad-keypair.pem
+# Requires: aws-cli, jq, SSH_KEY env var point to nomad-keypair.pem or SSH key at ~/workspace/nomad/nomad-keypair.pem
 # Usage: ./add_client_nodes.sh [count]  (default: 1)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

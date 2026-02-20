@@ -10,9 +10,11 @@ set -euo pipefail
 #   Phase 2 - Writes Nomad's Consul token to all nodes, restarts Nomad
 #   Phase 3 - Bootstraps Nomad ACL, creates policies + tokens
 #
-# After this script, Consul and Nomad UIs still allow unauthenticated access
-# (Consul default_policy = "allow"). Switch to "deny" in a planned maintenance
+# After this script, the Consul UI still allows unauthenticated access
+# (default_policy = "allow"). Switch to "deny" in a planned maintenance
 # window once all token consumers are configured.
+# The Nomad UI requires the management token immediately — Nomad has no
+# equivalent of Consul's default_policy = "allow".
 #
 # Usage: ./bootstrap_acl.sh
 
@@ -291,5 +293,5 @@ echo "  Read-only token    → monitoring systems"
 echo ""
 echo "Next steps:"
 echo "  Verify Consul UI:  http://<node>:8500  (no token required yet)"
-echo "  Verify Nomad UI:   http://<node>:4646  (no token required yet)"
+echo "  Verify Nomad UI:   http://<node>:4646  (Nomad management token required)"
 echo "  [MAINTENANCE WINDOW] Switch Consul to deny: ./aws/bin/cluster/enforce_acl.sh"

@@ -15,13 +15,15 @@ ACL is enabled in two phases to avoid service disruption:
 
 ```
 aws/acl/
-├── .gitignore                        # Blocks token files from git
+├── .gitignore                              # Blocks token files from git
 ├── consul/policies/
-│   ├── agent.policy.hcl              # Consul agent token policy
-│   └── nomad-server.policy.hcl       # Nomad's Consul integration token policy
+│   ├── agent.policy.hcl                    # Consul agent token policy
+│   ├── nomad-server.policy.hcl             # Nomad's Consul integration token policy
+│   ├── operator-readonly.policy.hcl        # Operator read-only token policy
+│   └── operator-readwrite.policy.hcl       # Operator read-write token policy
 └── nomad/policies/
-    ├── deployer.policy.hcl           # Job deployment token policy
-    └── readonly.policy.hcl           # Read-only monitoring token policy
+    ├── deployer.policy.hcl                 # Job deployment token policy
+    └── readonly.policy.hcl                 # Read-only monitoring token policy
 ```
 
 Policy HCL files are committed to git and fetched from GitHub by the bootstrap script. Token values are never committed.
@@ -32,9 +34,13 @@ Policy HCL files are committed to git and fetched from GitHub by the bootstrap s
 
 | Token | Consumer | Policy |
 |---|---|---|
-| Management | Product owner → password manager | Built-in (full access) |
+| Management | ACL administration only — password manager | Built-in (full access including ACL) |
 | Agent | Every Consul agent | `agent.policy.hcl` |
 | Nomad server | Nomad's `consul {}` block | `nomad-server.policy.hcl` |
+| Operator read-only | Engineers — UI browsing and CLI queries | `operator-readonly.policy.hcl` |
+| Operator read-write | Engineers — service registration and KV | `operator-readwrite.policy.hcl` |
+
+**ACL management** (creating, updating, and deleting tokens and policies) always requires the management token regardless of what other permissions are granted. The operator tokens cannot be used for ACL operations. Use the management token only for ACL administration and store it in the password manager; use an operator token for day-to-day work.
 
 A single shared agent token is used across all nodes. It is applied at runtime via `consul acl set-agent-token agent <token>` and persisted to disk by `enable_token_persistence = true`, so it survives restarts without re-application.
 
@@ -44,9 +50,122 @@ The Nomad server token is written to `/etc/nomad.d/consul-token.hcl` on each nod
 
 | Token | Consumer | Policy |
 |---|---|---|
-| Management | Product owner → password manager | Built-in (full access) |
-| Deployer | CI/CD systems, engineers | `deployer.policy.hcl` |
-| Read-only | Monitoring systems | `readonly.policy.hcl` |
+| Management | ACL administration only — password manager | Built-in (full access including ACL) |
+| Deployer | CI/CD systems, engineers deploying jobs | `deployer.policy.hcl` |
+| Read-only | Monitoring systems, UI browsing | `readonly.policy.hcl` |
+
+**ACL management** requires the management token. The deployer and read-only tokens cannot create or modify policies. Unlike Consul, Nomad has no equivalent of `default_policy = "allow"` — the UI and API require a token immediately once ACL is enabled.
+
+## Using Tokens
+
+### Consul CLI
+
+Set the token as an environment variable for an interactive session:
+```shell
+export CONSUL_HTTP_TOKEN=<token>
+consul members
+consul catalog services
+```
+
+Or pass it per-command:
+```shell
+consul members -token=<token>
+```
+
+**Which token:**
+- Browsing services, nodes, health checks, KV → operator read-only or read-write token
+- Creating/modifying/deleting ACL policies and tokens → management token
+
+### Consul UI
+
+Click **Log in** in the top right and paste the token. The operator tokens give read or read-write access to services, nodes, health checks, and KV. The management token additionally exposes the ACL panel for managing policies and tokens.
+
+### Nomad CLI
+
+Set the token as an environment variable for an interactive session:
+```shell
+export NOMAD_TOKEN=<token>
+nomad status
+nomad job run jobs/nginx.nomad
+```
+
+Or pass it per-command:
+```shell
+nomad status -token=<token>
+```
+
+**Which token:**
+- Viewing job status, logs, node info → read-only token
+- Deploying and managing jobs → deployer token
+- Creating/modifying/deleting ACL policies and tokens → management token
+
+### Nomad UI
+
+Click the person icon (top right) → **Log in** and paste the token. The read-only token gives a browsable view of jobs and allocations. The deployer token additionally allows job operations. The management token gives full access including the ACL panel.
+
+---
+
+## Creating Policies and Tokens
+
+Both operations require the management token. Run these on any cluster node via SSH.
+
+### Consul: Create a policy
+
+```shell
+CONSUL_HTTP_TOKEN=<mgmt-token> consul acl policy create \
+  -name <policy-name> \
+  -description '<description>' \
+  -rules - <<'EOF'
+<policy HCL>
+EOF
+```
+
+Example — the operator read-only policy:
+```shell
+CONSUL_HTTP_TOKEN=<mgmt-token> consul acl policy create \
+  -name operator-readonly \
+  -description 'Operator read-only policy' \
+  -rules - <<'EOF'
+node_prefix "" { policy = "read" }
+service_prefix "" { policy = "read" }
+agent_prefix "" { policy = "read" }
+key_prefix "" { policy = "read" }
+EOF
+```
+
+### Consul: Create a token
+
+```shell
+CONSUL_HTTP_TOKEN=<mgmt-token> consul acl token create \
+  -policy-name=<policy-name> \
+  -description='<description>' \
+  -format=json | jq -r '.SecretID'
+```
+
+The command prints the new token's `SecretID`. Save it immediately.
+
+### Nomad: Create a policy
+
+```shell
+NOMAD_TOKEN=<mgmt-token> nomad acl policy apply \
+  -description='<description>' <policy-name> - <<'EOF'
+<policy HCL>
+EOF
+```
+
+### Nomad: Create a token
+
+```shell
+NOMAD_TOKEN=<mgmt-token> nomad acl token create \
+  -name=<name> \
+  -policy=<policy-name> \
+  -type=client \
+  -json | jq -r '.SecretID'
+```
+
+Use `-type=management` only for a new management-level token.
+
+---
 
 ## ACL Config Files
 
@@ -61,7 +180,7 @@ Both config directories auto-load all `.hcl` files from the top-level directory 
 
 Run once from the local machine after the cluster is healthy:
 
-```sh
+```shell
 ./aws/bin/cluster/bootstrap_acl.sh
 ```
 
@@ -83,7 +202,7 @@ If the script is run again after a successful bootstrap, the bootstrap steps are
 
 After running the standard setup scripts on the new instance, run:
 
-```sh
+```shell
 ./aws/bin/instance/onboard_node.sh
 ```
 
@@ -98,7 +217,7 @@ The script prompts for the Consul agent token and the Nomad Consul token (both f
 
 Once all token consumers are configured, run from the local machine:
 
-```sh
+```shell
 ./aws/bin/cluster/enforce_acl.sh
 ```
 
@@ -120,24 +239,24 @@ Error bootstrapping: Unexpected response code: 400 (ACL bootstrap already done (
 
 **Step 2 — Identify the Raft leader.**
 On each server node, check the Nomad logs:
-```sh
+```shell
 journalctl -u nomad | grep "cluster leadership acquired"
 ```
 Only the current leader will show this. If you cannot determine the leader, write the file to all three nodes — the leader will process it.
 
 **Step 3 — Write the reset file on the leader.**
-```sh
+```shell
 echo "138" | sudo tee /opt/nomad/data/server/acl-bootstrap-reset
 ```
 
 **Step 4 — Restart Nomad on that node.**
-```sh
+```shell
 sudo systemctl restart nomad
 ```
 Nomad reads the file at startup, resets the bootstrap state, and deletes the file.
 
 **Step 5 — Re-bootstrap to get a new management token.**
-```sh
+```shell
 nomad acl bootstrap
 ```
 This succeeds and prints the new management token. Save it immediately.
@@ -169,7 +288,7 @@ When `consul acl bootstrap` runs, this becomes the management token. Since you c
 
 If the management token is truly lost and no `initial_management` token was configured, the only recovery is to wipe the Raft/FSM state on all server nodes. This destroys **all** ACL data (tokens, policies, service registrations stored in Raft) and requires re-running the full bootstrap procedure:
 
-```sh
+```shell
 # On each server node — stop Consul first
 sudo systemctl stop consul
 sudo rm -rf /opt/consul/data/raft /opt/consul/data/serf

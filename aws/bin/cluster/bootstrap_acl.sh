@@ -173,6 +173,14 @@ if [[ "$CONSUL_MGMT_TOKEN" != "<already-bootstrapped>" ]]; then
     wget -qO ${REMOTE_HOME}/nomad-server.policy.hcl '${CONSUL_POLICIES_URL}/nomad-server.policy.hcl'
     CONSUL_HTTP_TOKEN='$CONSUL_MGMT_TOKEN' consul acl policy create \
       -name nomad-server -description 'Nomad Consul integration policy' -rules - < ${REMOTE_HOME}/nomad-server.policy.hcl
+
+    wget -qO ${REMOTE_HOME}/operator-readonly.policy.hcl '${CONSUL_POLICIES_URL}/operator-readonly.policy.hcl'
+    CONSUL_HTTP_TOKEN='$CONSUL_MGMT_TOKEN' consul acl policy create \
+      -name operator-readonly -description 'Operator read-only policy' -rules - < ${REMOTE_HOME}/operator-readonly.policy.hcl
+
+    wget -qO ${REMOTE_HOME}/operator-readwrite.policy.hcl '${CONSUL_POLICIES_URL}/operator-readwrite.policy.hcl'
+    CONSUL_HTTP_TOKEN='$CONSUL_MGMT_TOKEN' consul acl policy create \
+      -name operator-readwrite -description 'Operator read-write policy' -rules - < ${REMOTE_HOME}/operator-readwrite.policy.hcl
   "
 
   echo "  Creating Consul tokens..."
@@ -187,6 +195,18 @@ if [[ "$CONSUL_MGMT_TOKEN" != "<already-bootstrapped>" ]]; then
       -policy-name=nomad-server -description='Nomad Consul integration token' -format=json" \
     | jq -r '.SecretID')
   echo "Nomad Token      : $CONSUL_NOMAD_TOKEN" >> "$TOKEN_OUTPUT"
+
+  CONSUL_OPERATOR_RO_TOKEN=$(ssh_exec "$BOOTSTRAP_NODE" \
+    "CONSUL_HTTP_TOKEN=$CONSUL_MGMT_TOKEN consul acl token create \
+      -policy-name=operator-readonly -description='Operator read-only token' -format=json" \
+    | jq -r '.SecretID')
+  echo "Operator RO Token: $CONSUL_OPERATOR_RO_TOKEN" >> "$TOKEN_OUTPUT"
+
+  CONSUL_OPERATOR_RW_TOKEN=$(ssh_exec "$BOOTSTRAP_NODE" \
+    "CONSUL_HTTP_TOKEN=$CONSUL_MGMT_TOKEN consul acl token create \
+      -policy-name=operator-readwrite -description='Operator read-write token' -format=json" \
+    | jq -r '.SecretID')
+  echo "Operator RW Token: $CONSUL_OPERATOR_RW_TOKEN" >> "$TOKEN_OUTPUT"
 
   echo "  Applying Consul agent token to all nodes..."
   for node in "${NODES[@]}"; do
@@ -287,9 +307,10 @@ echo ""
 echo "Token summary written to: $TOKEN_OUTPUT"
 echo "IMPORTANT: Securely store these tokens before deleting the output file!"
 echo ""
-echo "  Management tokens  → product owner → password manager"
-echo "  Deployer token     → CI/CD systems, deployment engineers"
-echo "  Read-only token    → monitoring systems"
+echo "  Consul/Nomad management tokens  → product owner → password manager (ACL admin only)"
+echo "  Consul operator tokens          → engineers (UI/CLI access)"
+echo "  Nomad deployer token            → CI/CD systems, deployment engineers"
+echo "  Nomad read-only token           → monitoring systems"
 echo ""
 echo "Next steps:"
 echo "  Verify Consul UI:  http://<node>:8500  (no token required yet)"

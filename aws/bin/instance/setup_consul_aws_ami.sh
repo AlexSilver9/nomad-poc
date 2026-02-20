@@ -13,7 +13,7 @@ set -euo pipefail
 
 # Variables
 CONSUL_SYSTEMD_CONFIG="/usr/lib/systemd/system/consul.service"
-CONSUL_VERSION="1.22.2-1"
+CONSUL_VERSION="1.22.3-1"
 
 # Read cluster node addresses from arguments or interactively
 nodes=()

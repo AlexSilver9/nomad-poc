@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 set -euo pipefail
 
 # Demonstrates running a service on an isolated node pool via ALB.

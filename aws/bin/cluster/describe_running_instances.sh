@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 set -euo pipefail
 
 # List all EC2 instances with their IPs and network info.

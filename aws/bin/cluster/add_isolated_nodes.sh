@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 set -euo pipefail
 
 # Add isolated client nodes to an existing Nomad cluster using a dedicated node pool.

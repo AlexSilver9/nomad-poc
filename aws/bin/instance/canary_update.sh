@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 set -euo pipefail
 
 # Demonstrates a Canary Deployment with traffic routing via ALB.

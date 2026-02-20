@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 set -euo pipefail
 
 # Create an AWS Application Load Balancer (ALB) for the Nomad ingress gateway.

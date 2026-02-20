@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 set -euo pipefail
 
 # Demonstrates Nomad node drain: gracefully migrates allocations off a node.

@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 set -euo pipefail
 
 # Install Consul in CLIENT-ONLY mode on Amazon Linux (AWS EC2).

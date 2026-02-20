@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 set -euo pipefail
 
 # Create 3 EC2 instances for the Nomad cluster (nomad1, nomad2, nomad3).

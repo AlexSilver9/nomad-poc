@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 set -euo pipefail
 
 # Full cluster setup script for AWS Nomad cluster with Consul service mesh.

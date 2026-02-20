@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 set -euo pipefail
 
 # Re-evaluates all system jobs so Nomad schedules them on newly eligible nodes.

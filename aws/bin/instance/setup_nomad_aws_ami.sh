@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 set -euo pipefail
 
 # Install and configure Nomad on Amazon Linux (AWS EC2).

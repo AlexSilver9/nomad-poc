@@ -284,6 +284,10 @@ if [[ "$NOMAD_MGMT_TOKEN" != "<already-bootstrapped>" ]]; then
     wget -qO ${REMOTE_HOME}/readonly.policy.hcl '${NOMAD_POLICIES_URL}/readonly.policy.hcl'
     NOMAD_TOKEN='$NOMAD_MGMT_TOKEN' nomad acl policy apply \
       -description='Read-only monitoring policy' readonly ${REMOTE_HOME}/readonly.policy.hcl
+
+    wget -qO ${REMOTE_HOME}/node-operator.policy.hcl '${NOMAD_POLICIES_URL}/node-operator.policy.hcl'
+    NOMAD_TOKEN='$NOMAD_MGMT_TOKEN' nomad acl policy apply \
+      -description='Node operator policy (AMI/kernel upgrades)' node-operator ${REMOTE_HOME}/node-operator.policy.hcl
   "
 
   echo "  Creating Nomad tokens..."
@@ -298,6 +302,12 @@ if [[ "$NOMAD_MGMT_TOKEN" != "<already-bootstrapped>" ]]; then
       -name=readonly -policy=readonly -type=client -json" \
     | jq -r '.SecretID')
   echo "Read-only Token  : $NOMAD_READONLY_TOKEN" >> "$TOKEN_OUTPUT"
+
+  NOMAD_NODE_OPERATOR_TOKEN=$(ssh_exec "$BOOTSTRAP_NODE" \
+    "NOMAD_TOKEN=$NOMAD_MGMT_TOKEN nomad acl token create \
+      -name=node-operator -policy=node-operator -type=client -json" \
+    | jq -r '.SecretID')
+  echo "Node Operator Token: $NOMAD_NODE_OPERATOR_TOKEN" >> "$TOKEN_OUTPUT"
 fi
 
 # ─────────────────────────────────────────────────────────────
@@ -311,6 +321,7 @@ echo "  Consul/Nomad management tokens  → product owner → password manager (
 echo "  Consul operator tokens          → engineers (UI/CLI access)"
 echo "  Nomad deployer token            → CI/CD systems, deployment engineers"
 echo "  Nomad read-only token           → monitoring systems"
+echo "  Nomad node-operator token       → operators performing AMI/kernel upgrades"
 echo ""
 echo "Next steps:"
 echo "  Verify Consul UI:  http://<node>:8500  (no token required yet)"

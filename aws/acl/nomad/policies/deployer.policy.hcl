@@ -5,7 +5,7 @@
 # Applied to: CI/CD systems, engineers who deploy and manage jobs
 #
 # This policy allows:
-# - Submit, stop, and manage jobs in the default namespace
+# - Submit, stop, and manage jobs in all namespaces
 # - Read job logs and filesystem
 # - Deploy to any node pool
 

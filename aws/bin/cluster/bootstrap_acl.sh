@@ -116,7 +116,7 @@ echo "Pre-phase: Downloading ACL files to bootstrap node"
 echo "──────────────────────────────────────────────"
 
 ssh_exec "$BOOTSTRAP_NODE" "mkdir -p ${REMOTE_ACL}/consul/policies ${REMOTE_ACL}/nomad/policies"
-ssh_exec "$BOOTSTRAP_NODE" "wget -qO ${REMOTE_ACL}/users.conf '${GITHUB_RAW}/aws/acl/users.conf'"
+ssh_exec "$BOOTSTRAP_NODE" "wget -qO ${REMOTE_ACL}/users.json '${GITHUB_RAW}/aws/acl/users.json'"
 for p in agent nomad-server operator-readonly operator-readwrite; do
   ssh_exec "$BOOTSTRAP_NODE" "wget -qO ${REMOTE_ACL}/consul/policies/${p}.policy.hcl '${CONSUL_POLICIES_URL}/${p}.policy.hcl'"
 done

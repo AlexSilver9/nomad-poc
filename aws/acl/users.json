@@ -1,0 +1,12 @@
+[
+  {
+    "username":     "alice",
+    "nomad_roles":  ["nomad-deployer", "nomad-node-operator"],
+    "consul_roles": ["consul-readwrite"]
+  },
+  {
+    "username":     "bob",
+    "nomad_roles":  ["nomad-deployer", "nomad-node-operator"],
+    "consul_roles": ["consul-readwrite"]
+  }
+]

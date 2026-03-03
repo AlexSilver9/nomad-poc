@@ -52,6 +52,7 @@ retry_join=$(echo -e "$retry_join" | sed '$ s/,$//')
 sudo yum install -y unzip
 sudo yum install -y yum-utils
 sudo yum install -y shadow-utils
+sudo yum install -y jq
 
 # Download and install Consul
 sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo

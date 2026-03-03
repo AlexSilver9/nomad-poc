@@ -71,6 +71,7 @@ ask_user() {
 sudo yum install -y unzip
 sudo yum install -y yum-utils
 sudo yum install -y shadow-utils
+sudo yum install -y jq
 
 # Verify Nomad cgroup v2 pre-requisites (same check — assuming cgroup v2 environment)
 echo "Checking cgroup controllers (should show cpuset, cpu, io, memory, pids):"

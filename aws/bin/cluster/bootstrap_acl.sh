@@ -26,6 +26,7 @@ SSH_KEY="${SSH_KEY:-$HOME/workspace/nomad/nomad-keypair.pem}"
 SSH_USER="ec2-user"
 SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o LogLevel=ERROR"
 REMOTE_HOME="/home/$SSH_USER"
+REMOTE_ACL="$REMOTE_HOME/acl"
 GITHUB_RAW="https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main"
 CONSUL_POLICIES_URL="$GITHUB_RAW/aws/acl/consul/policies"
 NOMAD_POLICIES_URL="$GITHUB_RAW/aws/acl/nomad/policies"
@@ -111,6 +112,21 @@ BOOTSTRAP_NODE="${NODES[0]}"
 
 # ─────────────────────────────────────────────────────────────
 echo ""
+echo "Pre-phase: Downloading ACL files to bootstrap node"
+echo "──────────────────────────────────────────────"
+
+ssh_exec "$BOOTSTRAP_NODE" "mkdir -p ${REMOTE_ACL}/consul/policies ${REMOTE_ACL}/nomad/policies"
+ssh_exec "$BOOTSTRAP_NODE" "wget -qO ${REMOTE_ACL}/users.conf '${GITHUB_RAW}/aws/acl/users.conf'"
+for p in agent nomad-server operator-readonly operator-readwrite; do
+  ssh_exec "$BOOTSTRAP_NODE" "wget -qO ${REMOTE_ACL}/consul/policies/${p}.policy.hcl '${CONSUL_POLICIES_URL}/${p}.policy.hcl'"
+done
+for p in deployer readonly node-operator; do
+  ssh_exec "$BOOTSTRAP_NODE" "wget -qO ${REMOTE_ACL}/nomad/policies/${p}.policy.hcl '${NOMAD_POLICIES_URL}/${p}.policy.hcl'"
+done
+echo "  ACL files downloaded to ${REMOTE_ACL}/"
+
+# ─────────────────────────────────────────────────────────────
+echo ""
 echo "Phase 0: Writing ACL config files to all nodes"
 echo "──────────────────────────────────────────────"
 
@@ -168,21 +184,17 @@ if [[ "$CONSUL_MGMT_TOKEN" != "<already-bootstrapped>" ]]; then
 
   echo "  Applying Consul policies..."
   ssh_exec "$BOOTSTRAP_NODE" "
-    wget -qO ${REMOTE_HOME}/agent.policy.hcl '${CONSUL_POLICIES_URL}/agent.policy.hcl'
     CONSUL_HTTP_TOKEN='$CONSUL_MGMT_TOKEN' consul acl policy create \
-      -name agent -description 'Consul agent token policy' -rules - < ${REMOTE_HOME}/agent.policy.hcl
+      -name agent -description 'Consul agent token policy' -rules - < ${REMOTE_ACL}/consul/policies/agent.policy.hcl
 
-    wget -qO ${REMOTE_HOME}/nomad-server.policy.hcl '${CONSUL_POLICIES_URL}/nomad-server.policy.hcl'
     CONSUL_HTTP_TOKEN='$CONSUL_MGMT_TOKEN' consul acl policy create \
-      -name nomad-server -description 'Nomad Consul integration policy' -rules - < ${REMOTE_HOME}/nomad-server.policy.hcl
+      -name nomad-server -description 'Nomad Consul integration policy' -rules - < ${REMOTE_ACL}/consul/policies/nomad-server.policy.hcl
 
-    wget -qO ${REMOTE_HOME}/operator-readonly.policy.hcl '${CONSUL_POLICIES_URL}/operator-readonly.policy.hcl'
     CONSUL_HTTP_TOKEN='$CONSUL_MGMT_TOKEN' consul acl policy create \
-      -name operator-readonly -description 'Operator read-only policy' -rules - < ${REMOTE_HOME}/operator-readonly.policy.hcl
+      -name operator-readonly -description 'Operator read-only policy' -rules - < ${REMOTE_ACL}/consul/policies/operator-readonly.policy.hcl
 
-    wget -qO ${REMOTE_HOME}/operator-readwrite.policy.hcl '${CONSUL_POLICIES_URL}/operator-readwrite.policy.hcl'
     CONSUL_HTTP_TOKEN='$CONSUL_MGMT_TOKEN' consul acl policy create \
-      -name operator-readwrite -description 'Operator read-write policy' -rules - < ${REMOTE_HOME}/operator-readwrite.policy.hcl
+      -name operator-readwrite -description 'Operator read-write policy' -rules - < ${REMOTE_ACL}/consul/policies/operator-readwrite.policy.hcl
   "
 
   echo "  Creating Consul tokens..."
@@ -267,17 +279,14 @@ if [[ "$NOMAD_MGMT_TOKEN" != "<already-bootstrapped>" ]]; then
 
   echo "  Applying Nomad policies..."
   ssh_exec "$BOOTSTRAP_NODE" "
-    wget -qO ${REMOTE_HOME}/deployer.policy.hcl '${NOMAD_POLICIES_URL}/deployer.policy.hcl'
     NOMAD_TOKEN='$NOMAD_MGMT_TOKEN' nomad acl policy apply \
-      -description='Job deployment policy' deployer ${REMOTE_HOME}/deployer.policy.hcl
+      -description='Job deployment policy' deployer ${REMOTE_ACL}/nomad/policies/deployer.policy.hcl
 
-    wget -qO ${REMOTE_HOME}/readonly.policy.hcl '${NOMAD_POLICIES_URL}/readonly.policy.hcl'
     NOMAD_TOKEN='$NOMAD_MGMT_TOKEN' nomad acl policy apply \
-      -description='Read-only monitoring policy' readonly ${REMOTE_HOME}/readonly.policy.hcl
+      -description='Read-only monitoring policy' readonly ${REMOTE_ACL}/nomad/policies/readonly.policy.hcl
 
-    wget -qO ${REMOTE_HOME}/node-operator.policy.hcl '${NOMAD_POLICIES_URL}/node-operator.policy.hcl'
     NOMAD_TOKEN='$NOMAD_MGMT_TOKEN' nomad acl policy apply \
-      -description='Node operator policy (AMI/kernel upgrades)' node-operator ${REMOTE_HOME}/node-operator.policy.hcl
+      -description='Node operator policy (AMI/kernel upgrades)' node-operator ${REMOTE_ACL}/nomad/policies/node-operator.policy.hcl
   "
 fi
 

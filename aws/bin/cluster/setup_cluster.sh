@@ -517,7 +517,7 @@ wait_and_test_alb() {
 #------------------------------------------------------------------------------
 # STEP 11: Download additional scripts (not run automatically)
 #------------------------------------------------------------------------------
-download_demo_files() {
+download_additional_scripts() {
     log_info "=== STEP 11: Downloading additional scripts ==="
 
     local first_node="${NODES[0]}"
@@ -531,6 +531,7 @@ download_demo_files() {
         eval_system_jobs.sh
         file_service.sh
         onboard_node.sh
+        create_user_tokens.sh
     )
     log_info "Downloading additional scripts to $first_node..."
     for file in "${scripts[@]}"; do
@@ -560,7 +561,7 @@ main() {
     test_internal_routing
     create_load_balancer
     wait_and_test_alb
-    download_demo_files
+    download_additional_scripts
 
     echo ""
     echo "=============================================="

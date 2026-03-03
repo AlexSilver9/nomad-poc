@@ -6,9 +6,11 @@ set -euo pipefail
 #
 # This script:
 #   Phase 0 - Writes ACL config files to all nodes and does a rolling restart
-#   Phase 1 - Bootstraps Consul ACL, creates policies + tokens, applies agent tokens
+#   Phase 1 - Bootstraps Consul ACL, creates policies + infra tokens, applies agent tokens
 #   Phase 2 - Writes Nomad's Consul token to all nodes, restarts Nomad
-#   Phase 3 - Bootstraps Nomad ACL, creates policies + tokens
+#   Phase 3 - Bootstraps Nomad ACL, creates policies only (no user/service tokens)
+#
+# Operator and user tokens are created separately by create_user_tokens.sh.
 #
 # After this script, the Consul UI still allows unauthenticated access
 # (default_policy = "allow"). Switch to "deny" in a planned maintenance
@@ -196,18 +198,6 @@ if [[ "$CONSUL_MGMT_TOKEN" != "<already-bootstrapped>" ]]; then
     | jq -r '.SecretID')
   echo "Nomad Token      : $CONSUL_NOMAD_TOKEN" >> "$TOKEN_OUTPUT"
 
-  CONSUL_OPERATOR_RO_TOKEN=$(ssh_exec "$BOOTSTRAP_NODE" \
-    "CONSUL_HTTP_TOKEN=$CONSUL_MGMT_TOKEN consul acl token create \
-      -policy-name=operator-readonly -description='Operator read-only token' -format=json" \
-    | jq -r '.SecretID')
-  echo "Operator RO Token: $CONSUL_OPERATOR_RO_TOKEN" >> "$TOKEN_OUTPUT"
-
-  CONSUL_OPERATOR_RW_TOKEN=$(ssh_exec "$BOOTSTRAP_NODE" \
-    "CONSUL_HTTP_TOKEN=$CONSUL_MGMT_TOKEN consul acl token create \
-      -policy-name=operator-readwrite -description='Operator read-write token' -format=json" \
-    | jq -r '.SecretID')
-  echo "Operator RW Token: $CONSUL_OPERATOR_RW_TOKEN" >> "$TOKEN_OUTPUT"
-
   echo "  Applying Consul agent token to all nodes..."
   for node in "${NODES[@]}"; do
     echo "    $node"
@@ -289,25 +279,6 @@ if [[ "$NOMAD_MGMT_TOKEN" != "<already-bootstrapped>" ]]; then
     NOMAD_TOKEN='$NOMAD_MGMT_TOKEN' nomad acl policy apply \
       -description='Node operator policy (AMI/kernel upgrades)' node-operator ${REMOTE_HOME}/node-operator.policy.hcl
   "
-
-  echo "  Creating Nomad tokens..."
-  NOMAD_DEPLOYER_TOKEN=$(ssh_exec "$BOOTSTRAP_NODE" \
-    "NOMAD_TOKEN=$NOMAD_MGMT_TOKEN nomad acl token create \
-      -name=deployer -policy=deployer -type=client -json" \
-    | jq -r '.SecretID')
-  echo "Deployer Token   : $NOMAD_DEPLOYER_TOKEN" >> "$TOKEN_OUTPUT"
-
-  NOMAD_READONLY_TOKEN=$(ssh_exec "$BOOTSTRAP_NODE" \
-    "NOMAD_TOKEN=$NOMAD_MGMT_TOKEN nomad acl token create \
-      -name=readonly -policy=readonly -type=client -json" \
-    | jq -r '.SecretID')
-  echo "Read-only Token  : $NOMAD_READONLY_TOKEN" >> "$TOKEN_OUTPUT"
-
-  NOMAD_NODE_OPERATOR_TOKEN=$(ssh_exec "$BOOTSTRAP_NODE" \
-    "NOMAD_TOKEN=$NOMAD_MGMT_TOKEN nomad acl token create \
-      -name=node-operator -policy=node-operator -type=client -json" \
-    | jq -r '.SecretID')
-  echo "Node Operator Token: $NOMAD_NODE_OPERATOR_TOKEN" >> "$TOKEN_OUTPUT"
 fi
 
 # ─────────────────────────────────────────────────────────────
@@ -318,12 +289,11 @@ echo "Token summary written to: $TOKEN_OUTPUT"
 echo "IMPORTANT: Securely store these tokens before deleting the output file!"
 echo ""
 echo "  Consul/Nomad management tokens  → product owner → password manager (ACL admin only)"
-echo "  Consul operator tokens          → engineers (UI/CLI access)"
-echo "  Nomad deployer token            → CI/CD systems, deployment engineers"
-echo "  Nomad read-only token           → monitoring systems"
-echo "  Nomad node-operator token       → operators performing AMI/kernel upgrades"
+echo "  Consul agent token              → applied to all nodes automatically"
+echo "  Consul nomad token              → written to /etc/nomad.d/consul-token.hcl"
 echo ""
 echo "Next steps:"
 echo "  Verify Consul UI:  http://<node>:8500  (no token required yet)"
 echo "  Verify Nomad UI:   http://<node>:4646  (Nomad management token required)"
+echo "  Create roles + user tokens:       ./aws/bin/instance/create_user_tokens.sh  (run on a node)"
 echo "  [MAINTENANCE WINDOW] Switch Consul to deny: ./aws/bin/cluster/enforce_acl.sh"

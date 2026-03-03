@@ -16,16 +16,35 @@
 - Node-Schwenk
 - Node drain per UI? -> YES
 - Node drain -> startet erst neue Allocs auf anderer Instanz und drained dann
-
 - File Organization
 - Volumes (EFS / lokaler flüchtiger Storage / KEIN CSI)
-- ACLs (in between)
+- ACLs
 - Nomad ACL lost token bootstrap (leader: nomad acl bootstrap -> sudo tee /opt/nomad/data/server/acl-bootstrap-reset -> restart)
 - Consul token generation or initial_management token
+- mTLS
+- DEVOPS-2038
+
+- docker registry connection (tech user kommt von Steffen)
+- demo service deployen & testen
+    - mapping:  /data/container/demo/...
+    - registry: dockerhub.appservices.mitel.com
+    - image:    /app/demo:1.0.0
+    - Payara HTTPS:
+        -> nginx stream listener
+        -> ALB: TCP passthrough to nginx port 8083 — no TLS termination!!
+- Environment Variables
+- Variables (aka Kubernetes ConfigMaps)
+    - Env Vars -> Static per Job -> im Git -> Job Redeploy on Change
+    - Consul KV -> Dynamic -> Runtime update of vars (pendant to CM), secret management, ACLs
+    - Nomad Variables -> Dynamic -> Runtime update of vars -> secret management, ACLs
 
 # TODO:
-
-- mTLS
+sudo git pull origin main --rebase
+- Rollenkonzept für personalisierte User (alice, bob) -> DONE
+- Update CheatSheet
+- Update SETUP.md
+- `consul/policies/agent.policy.hcl`
+    - scope agent tokens to their own node name using `node "hostname" { policy = "write" }`
 - Nomad Binary Update
     - https://developer.hashicorp.com/nomad/docs/upgrade
     - https://developer.hashicorp.com/nomad/docs/upgrade/upgrade-specific
@@ -39,7 +58,6 @@
 - Failure Handling
 - Health Checks
     - https://developer.hashicorp.com/nomad/docs/job-specification/check
-- Variables (aka Kubernetes ConfigMaps)
 - Job Parameters (aka Args) possible?
 - Nomad Actions
     - https://developer.hashicorp.com/nomad/docs/job-declare/nomad-actions
@@ -51,8 +69,8 @@
 - Vault TLS
 - systemd Unit Update
 - node pools & constraints
-- Port Forwarding
-    - https://github.com/hashicorp/nomad/issues/6925
+- Port Forwarding https://github.com/hashicorp/nomad/issues/6925
+- Garbage Collection (Docker Images, Nomad, Consul)
 - Migrationskonzept
 
 # OPTIONAL:

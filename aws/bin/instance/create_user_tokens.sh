@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Create Nomad roles, Consul roles, and personal user tokens.
-# Run this AFTER bootstrap_acl.sh has completed successfully.
+# Run this on a node AFTER bootstrap_acl.sh has completed successfully.
 #
 # Run directly on a cluster node (requires nomad and consul CLIs).
 #
@@ -20,7 +20,7 @@ set -euo pipefail
 #   ./aws/bin/instance/create_user_tokens.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ACL_DIR="$SCRIPT_DIR/../../acl"
+ACL_DIR="$HOME/acl"
 USERS_CONF="$ACL_DIR/users.conf"
 TOKEN_OUTPUT="$ACL_DIR/user-tokens-output.txt"
 
@@ -92,28 +92,29 @@ while IFS= read -r line; do
   # Skip blank lines and comments
   [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
 
-  # Parse: username  nomad_roles  consul_roles
-  read -r username nomad_roles consul_roles <<< "$line"
+  # Parse: username  nomad_roles  consul_roles  (strip \r for CRLF-safe parsing)
+  read -r username nomad_roles consul_roles <<< "${line//$'\r'/}"
+  [[ -z "$username" || -z "$nomad_roles" || -z "$consul_roles" ]] && continue
 
   echo "  user: $username"
 
   # --- Nomad token ---
-  existing_nomad=$(nomad acl token list -json 2>/dev/null | jq -r --arg n "$username" '.[] | select(.Name == $n) | .SecretID' || true)
-  if [[ -n "$existing_nomad" ]]; then
+  existing_nomad_accessor=$(nomad acl token list -json 2>/dev/null | jq -r --arg n "$username" '.[] | select(.Name == $n) | .AccessorID' || true)
+  if [[ -n "$existing_nomad_accessor" ]]; then
     echo "    nomad token for '$username' already exists — skipping"
-    nomad_secret="$existing_nomad"
+    nomad_secret=$(curl -s -H "X-Nomad-Token: $NOMAD_TOKEN" "http://localhost:4646/v1/acl/token/$existing_nomad_accessor" | jq -r '.SecretID')
   else
-    # Build -role= flags from comma-separated list
+    # Build -role-name= flags from comma-separated list
     nomad_role_flags=()
     IFS=',' read -ra roles <<< "$nomad_roles"
-    for r in "${roles[@]}"; do
-      nomad_role_flags+=("-role=${r}")
+    for r in "${roles[@]+"${roles[@]}"}"; do
+      nomad_role_flags+=("-role-name=${r}")
     done
 
     nomad_secret=$(nomad acl token create \
       -name="$username" \
       -type=client \
-      "${nomad_role_flags[@]}" \
+      "${nomad_role_flags[@]+"${nomad_role_flags[@]}"}" \
       -json | jq -r '.SecretID')
     echo "    nomad token created"
   fi
@@ -127,13 +128,13 @@ while IFS= read -r line; do
     # Build -role-name= flags from comma-separated list
     consul_role_flags=()
     IFS=',' read -ra roles <<< "$consul_roles"
-    for r in "${roles[@]}"; do
+    for r in "${roles[@]+"${roles[@]}"}"; do
       consul_role_flags+=("-role-name=${r}")
     done
 
     consul_secret=$(consul acl token create \
       -description="$username" \
-      "${consul_role_flags[@]}" \
+      "${consul_role_flags[@]+"${consul_role_flags[@]}"}" \
       -format=json | jq -r '.SecretID')
     echo "    consul token created"
   fi

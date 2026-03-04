@@ -14,17 +14,17 @@ aws/acl/
 │   │   ├── operator-readonly.policy.hcl
 │   │   └── operator-readwrite.policy.hcl
 │   └── roles/
-│       ├── consul-readonly.role.hcl  # Role reference: consul-readonly
-│       └── consul-readwrite.role.hcl        # Role reference: consul-readwrite
+│       ├── readonly.role.hcl         # Role reference: readonly
+│       └── readwrite.role.hcl        # Role reference: readwrite
 └── nomad/
     ├── policies/
     │   ├── deployer.policy.hcl       # Job deployment token policy
     │   ├── readonly.policy.hcl       # Read-only monitoring token policy
     │   └── node-operator.policy.hcl  # Node drain/enable token policy
     └── roles/
-        ├── nomad-deployer.role.hcl   # Role reference: nomad-deployer
-        ├── nomad-readonly.role.hcl   # Role reference: nomad-readonly
-        └── nomad-node-operator.role.hcl
+        ├── deployer.role.hcl         # Role reference: deployer
+        ├── readonly.role.hcl         # Role reference: readonly
+        └── operator.role.hcl         # Role reference: operator
 ```
 
 Policy and role reference files are committed to git. Token values are never committed — see `.gitignore` in this directory.

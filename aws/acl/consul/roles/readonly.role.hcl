@@ -2,7 +2,7 @@
 # Roles have no HCL file format; they exist only as objects in the cluster's ACL state.
 # The role described here is created at runtime by aws/bin/instance/create_user_tokens.sh.
 #
-# Role: consul-readonly
+# Role: readonly
 # Policies: operator-readonly
 # Assigned to: monitoring systems, audit tools, read-only users
 #

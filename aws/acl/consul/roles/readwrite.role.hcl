@@ -2,7 +2,7 @@
 # Roles have no HCL file format; they exist only as objects in the cluster's ACL state.
 # The role described here is created at runtime by aws/bin/instance/create_user_tokens.sh.
 #
-# Role: consul-readwrite
+# Role: readwrite
 # Policies: operator-readwrite
 # Assigned to: engineers managing service mesh configuration, KV, and service registrations
 #

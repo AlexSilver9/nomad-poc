@@ -2,7 +2,7 @@
 # Roles have no HCL file format; they exist only as objects in the cluster's ACL state.
 # The role described here is created at runtime by aws/bin/instance/create_user_tokens.sh.
 #
-# Role: nomad-deployer
+# Role: deployer
 # Policies: deployer
 # Assigned to: CI/CD systems, engineers who deploy and manage jobs
 #

@@ -50,9 +50,9 @@ create_nomad_role() {
   fi
 }
 
-create_nomad_role "nomad-deployer"      "deployer"      "Submit and manage jobs, exec into allocations"
-create_nomad_role "nomad-readonly"      "readonly"      "Read-only access to jobs, logs, and nodes"
-create_nomad_role "nomad-node-operator" "node-operator" "Drain and re-enable nodes"
+create_nomad_role "deployer"      "deployer"      "Submit and manage jobs, exec into allocations"
+create_nomad_role "readonly"      "readonly"      "Read-only access to jobs, logs, and nodes"
+create_nomad_role "operator"      "node-operator" "Drain and re-enable nodes"
 
 echo ""
 
@@ -71,8 +71,8 @@ create_consul_role() {
   fi
 }
 
-create_consul_role "consul-readonly"  "operator-readonly"  "Read nodes, services, agents, and KV store"
-create_consul_role "consul-readwrite" "operator-readwrite" "Write nodes, services, agents, and KV store"
+create_consul_role "readonly"  "operator-readonly"  "Read nodes, services, agents, and KV store"
+create_consul_role "readwrite" "operator-readwrite" "Write nodes, services, agents, and KV store"
 
 echo ""
 

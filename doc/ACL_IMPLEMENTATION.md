@@ -24,17 +24,17 @@ aws/acl/
 │   │   ├── operator-readonly.policy.hcl    # Operator read-only token policy
 │   │   └── operator-readwrite.policy.hcl   # Operator read-write token policy
 │   └── roles/
-│       ├── consul-readonly.role.hcl              # Role reference: consul-readonly
-│       └── consul-readwrite.role.hcl              # Role reference: consul-readwrite
+│       ├── readonly.role.hcl               # Role reference: readonly
+│       └── readwrite.role.hcl              # Role reference: readwrite
 └── nomad/
     ├── policies/
     │   ├── deployer.policy.hcl             # Job deployment token policy
     │   ├── readonly.policy.hcl             # Read-only monitoring token policy
     │   └── node-operator.policy.hcl        # Node drain/enable token policy
     └── roles/
-        ├── nomad-deployer.role.hcl         # Role reference: nomad-deployer
-        ├── nomad-readonly.role.hcl               # Role reference: nomad-readonly
-        └── nomad-node-operator.role.hcl    # Role reference: nomad-node-operator
+        ├── deployer.role.hcl               # Role reference: deployer
+        ├── readonly.role.hcl               # Role reference: readonly
+        └── operator.role.hcl               # Role reference: operator
 ```
 
 Policy and role reference HCL files are committed to git. Token values are never committed.
@@ -48,7 +48,7 @@ Policy and role reference HCL files are committed to git. Token values are never
 | Management | ACL administration only — password manager | Built-in (full access including ACL) |
 | Agent | Every Consul agent | `agent.policy.hcl` (direct policy) |
 | Nomad server | Nomad's `consul {}` block | `nomad-server.policy.hcl` (direct policy) |
-| Personal user token | Named engineer (e.g. alice) | `consul-readonly` or `consul-readwrite` role |
+| Personal user token | Named engineer (e.g. alice) | `readonly` or `readwrite` role |
 
 **ACL management** (creating, updating, and deleting tokens and policies) always requires the management token regardless of what other permissions are granted. Personal user tokens cannot be used for ACL operations. Use the management token only for ACL administration and store it in the password manager.
 
@@ -63,7 +63,7 @@ The Nomad server token is written to `/etc/nomad.d/consul-token.hcl` on each nod
 | Management | ACL administration only — password manager | Built-in (full access including ACL) |
 | Deployer (service) | CI/CD systems | `deployer.policy.hcl` (direct policy) |
 | Read-only (service) | Monitoring systems | `readonly.policy.hcl` (direct policy) |
-| Personal user token | Named engineer (e.g. alice) | `nomad-deployer` + `nomad-node-operator` roles |
+| Personal user token | Named engineer (e.g. alice) | `deployer` + `operator` roles |
 
 **ACL management** requires the management token. Personal user tokens and service tokens cannot create or modify policies. Unlike Consul, Nomad has no equivalent of `default_policy = "allow"` — the UI and API require a token immediately once ACL is enabled.
 
@@ -75,16 +75,16 @@ Roles group one or more policies into a reusable, named unit. Tokens are assigne
 
 | Role | Policy bundled | What it grants |
 |---|---|---|
-| `nomad-deployer` | `deployer.policy.hcl` | Submit/dispatch/stop jobs, alloc-exec, read logs & fs, node_pool write |
-| `nomad-readonly` | `readonly.policy.hcl` | Read job status, logs, fs; node/agent/pool read — no writes |
-| `nomad-node-operator` | `node-operator.policy.hcl` | Drain and re-enable nodes, alloc lifecycle |
+| `deployer` | `deployer.policy.hcl` | Submit/dispatch/stop jobs, alloc-exec, read logs & fs, node_pool write |
+| `readonly` | `readonly.policy.hcl` | Read job status, logs, fs; node/agent/pool read — no writes |
+| `operator` | `node-operator.policy.hcl` | Drain and re-enable nodes, alloc lifecycle |
 
 ### Consul roles
 
 | Role | Policy bundled | What it grants |
 |---|---|---|
-| `consul-readonly` | `operator-readonly.policy.hcl` | Read nodes, services, agents, KV |
-| `consul-readwrite` | `operator-readwrite.policy.hcl` | Write nodes, services, agents, KV |
+| `readonly` | `operator-readonly.policy.hcl` | Read nodes, services, agents, KV |
+| `readwrite` | `operator-readwrite.policy.hcl` | Write nodes, services, agents, KV |
 
 Roles are created by `create_user_tokens.sh` (idempotent — safe to re-run).
 
@@ -96,9 +96,9 @@ Personal tokens tie a named person to a specific set of roles. Each person gets 
 
 | Level | Nomad roles | Consul roles | Use case |
 |---|---|---|---|
-| admin | `nomad-deployer`, `nomad-node-operator` | `consul-readwrite` | Engineers with full operational access |
-| deployer | `nomad-deployer` | `consul-readwrite` | Engineers deploying jobs only |
-| readonly | `nomad-readonly` | `consul-readonly` | Monitoring, audit, junior access |
+| admin | `deployer`, `operator` | `readwrite` | Engineers with full operational access |
+| deployer | `deployer` | `readwrite` | Engineers deploying jobs only |
+| readonly | `readonly` | `readonly` | Monitoring, audit, junior access |
 
 ### Managing users
 
@@ -106,8 +106,8 @@ User-to-role assignments are defined in [`aws/acl/users.conf`](../aws/acl/users.
 
 ```
 # username   nomad_roles                          consul_roles
-alice        nomad-deployer,nomad-node-operator   consul-readwrite
-bob          nomad-deployer,nomad-node-operator   consul-readwrite
+alice        deployer,operator   readwrite
+bob          deployer,operator   readwrite
 ```
 
 **Create or refresh user tokens** (run on a cluster node after `bootstrap_acl.sh`):

@@ -339,7 +339,10 @@ This succeeds and prints the new management token. Save it immediately.
 
 ### Consul: Recovering a Lost Management Token
 
-Consul has no reset-file mechanism equivalent to Nomad's. **Prevention is the right answer.**
+Resetting Consul ACL system is described here:
+
+https://developer.hashicorp.com/consul/docs/secure/acl/reset
+
 
 #### Prevention: `initial_management` token
 

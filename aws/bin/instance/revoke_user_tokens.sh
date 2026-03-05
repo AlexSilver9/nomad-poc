@@ -1,8 +1,8 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-# Revoke Consul and Nomad tokens for the given user.
-# Delegates to revoke_consul_user_token.sh and revoke_nomad_user_token.sh.
+# Revokes all Consul and Nomad tokens for the given username.
+# Delegates to revoke_consul_user_tokens.sh and revoke_nomad_user_tokens.sh.
 #
 # Prerequisites:
 #   CONSUL_HTTP_TOKEN — Consul management token (export before running)
@@ -19,6 +19,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [[ -n "${NOMAD_TOKEN:-}" ]]       || { echo "Error: NOMAD_TOKEN not set"; exit 1; }
 [[ $# -eq 1 ]]                    || { echo "Usage: $0 <username>"; exit 1; }
 
-"$SCRIPT_DIR/revoke_nomad_user_token.sh" "$1"
+"$SCRIPT_DIR/revoke_nomad_user_tokens.sh" "$1"
 echo ""
-"$SCRIPT_DIR/revoke_consul_user_token.sh" "$1"
+"$SCRIPT_DIR/revoke_consul_user_tokens.sh" "$1"

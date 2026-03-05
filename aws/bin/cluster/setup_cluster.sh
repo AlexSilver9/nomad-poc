@@ -532,8 +532,8 @@ download_additional_scripts() {
         file_service.sh
         onboard_node.sh
         create_user_tokens.sh
-        revoke_consul_user_token.sh
-        revoke_nomad_user_token.sh
+        revoke_consul_user_tokens.sh
+        revoke_nomad_user_tokens.sh
         revoke_user_tokens.sh
     )
     log_info "Downloading additional scripts to $first_node..."

@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-# Revoke Nomad token for the given user.
+# Revokes all Nomad token for the given username.
 #
 # Prerequisites:
 #   NOMAD_TOKEN — Nomad management token (export before running)

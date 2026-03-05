@@ -1,14 +1,14 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-# Revoke Consul tokens for the given user.
+# Revoke Consul token for the given user.
 #
 # Prerequisites:
 #   CONSUL_HTTP_TOKEN — Consul management token (export before running)
 #
 # Usage:
 #   export CONSUL_HTTP_TOKEN=<management-token>
-#   ./aws/bin/instance/revoke_consul_user_tokens.sh <username>
+#   ./aws/bin/instance/revoke_consul_user_token.sh <username>
 
 command -v consul &>/dev/null || { echo "Error: consul CLI required"; exit 1; }
 command -v jq     &>/dev/null || { echo "Error: jq required"; exit 1; }

@@ -53,6 +53,12 @@ Allocation status (incl. Dynamic Port Mapping):
 nomad alloc status <allocation-id>
 ```
 
+Execute command or open shell on alloc:
+```shell
+nomad alloc exec -task=<task-name> <allocation-id> <command>
+# e.g. `nomad alloc exec -task=app 79d50fcd /bin/bash`
+```
+
 Logs:
 ```shell
 nomad logs -f <allocation-id>

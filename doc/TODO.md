@@ -22,8 +22,6 @@
 - Nomad ACL lost token bootstrap (leader: nomad acl bootstrap -> sudo tee /opt/nomad/data/server/acl-bootstrap-reset -> restart)
 - Consul token generation or initial_management token
 - mTLS
-- DEVOPS-2038
-
 - docker registry connection (tech user kommt von Steffen)
 - demo service deployen & testen
     - mapping:  /data/container/demo/...
@@ -37,12 +35,39 @@
     - Env Vars -> Static per Job -> im Git -> Job Redeploy on Change
     - Consul KV -> Dynamic -> Runtime update of vars (pendant to CM), secret management, ACLs
     - Nomad Variables -> Dynamic -> Runtime update of vars -> secret management, ACLs
+- Rollenkonzept für personalisierte User (alice, bob)
+
+- Rename main -> master
+- Rename "nomad-deployer", "nomad-operator", "consul-readwrite"
+- Volumes mappen
+    - /data/container/demo/logs:/opt/payara/logs
+    - /data/container/demo/javamelody:/data/javamelody
+    -> chown -R 1111:1111 (parara)
+    -> redeploy with purge
+- Exec into alloc (Start interactive shell / run command on running container)
+
+- Deploy/Undeploy Script: deploy <service name>
+- Token Revoke Scripts (Script für Token Löschung)
+- 2 Repos:
+    - Cluster Scripts & ACLs
+    - Service Definitions
+- 3-Node Cluster bilden
+- Update SETUP.md + SERVICES.md
 
 # TODO:
-sudo git pull origin main --rebase
-- Rollenkonzept für personalisierte User (alice, bob) -> DONE
+sudo git pull origin master --rebase
+
+- ACLs aktiv setzen
+- SSL -> ALB -> Nginx SSL -> Payara SSL
+    - Wie kommt man an den Hostname im Request
+    - Kein Portmapping im ALB
+- Scripts Branches
+    - main (prod)
+    - staging
+    - dev
+
 - Update CheatSheet
-- Update SETUP.md
+- Document Consul ACL Reset: https://developer.hashicorp.com/consul/docs/secure/acl/reset
 - `consul/policies/agent.policy.hcl`
     - scope agent tokens to their own node name using `node "hostname" { policy = "write" }`
 - Nomad Binary Update
@@ -52,7 +77,6 @@ sudo git pull origin main --rebase
 - Resources OOM doesn't raise
 - Docker Stateful Jobs
 - Start container with interactive shell
-- Start interactive Shell on running container
 - Retry / Reschedule Policies
 - Timeouts & Exit Codes
 - Failure Handling

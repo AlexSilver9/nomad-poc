@@ -33,17 +33,17 @@ job "ingress-gateway" {
 
               service {
                 name  = "business-service"
-                hosts = ["business-service"]
+                hosts = ["business-service.example.com"]
               }
 
               service {
                 name  = "canary-update-service"
-                hosts = ["canary-update-service"]
+                hosts = ["canary-update-service.example.com"]
               }
 
               service {
                 name  = "web-service"
-                hosts = ["*"]
+                hosts = ["web-service.example.com"]
               }
             }
           }

@@ -12,7 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SSH_KEY="${SSH_KEY:-$HOME/workspace/nomad/nomad-keypair.pem}"
 SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o LogLevel=ERROR"
 TARGET_GROUP_NAME="nomad-target-group"
-TARGET_PORT=8081
+TARGET_PORT=8443  # nginx HTTPS listener (with-https-termination.nomad.hcl)
 NODE_POOL="sensitive-node-pool"
 EFS_NAME="nomad-efs"
 GITHUB_RAW_BASE="https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws"

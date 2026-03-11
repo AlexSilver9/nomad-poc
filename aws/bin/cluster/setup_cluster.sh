@@ -392,9 +392,11 @@ test_internal_routing() {
     log_info "Waiting for services to be ready..."
     sleep 15
 
+    # Testing via nginx on port 8081 (HTTP, job.nomad.hcl).
+    # Host header must match the FQDN configured in the ingress gateway hosts field.
     log_info "Testing web-service (default route)..."
     local result
-    result=$(ssh_run "$first_node" "curl -s http://localhost:8081/" 2>/dev/null || echo "FAILED")
+    result=$(ssh_run "$first_node" "curl -s -H 'Host: web-service.example.com' http://localhost:8081/" 2>/dev/null || echo "FAILED")
     if echo "$result" | grep -q "hello world"; then
         log_success "Web service: OK - $result"
     else
@@ -402,7 +404,7 @@ test_internal_routing() {
     fi
 
     log_info "Testing business-service (Host header)..."
-    result=$(ssh_run "$first_node" "curl -sH 'Host: business-service' http://localhost:8081/ | grep -o 'Name: business-service' || echo 'NOT FOUND'" 2>/dev/null)
+    result=$(ssh_run "$first_node" "curl -s -H 'Host: business-service.example.com' http://localhost:8081/ | grep -o 'Name: business-service' || echo 'NOT FOUND'" 2>/dev/null)
     if echo "$result" | grep -q "business-service"; then
         log_success "Business service: OK"
     else
@@ -410,7 +412,7 @@ test_internal_routing() {
     fi
 
     log_info "Testing legacy API route..."
-    result=$(ssh_run "$first_node" "curl -sH 'Host: business-service' http://localhost:8081/legacy-business-service/test | grep -o 'Name: business-service-api' || echo 'NOT FOUND'" 2>/dev/null)
+    result=$(ssh_run "$first_node" "curl -s -H 'Host: business-service.example.com' http://localhost:8081/legacy-business-service/test | grep -o 'Name: business-service-api' || echo 'NOT FOUND'" 2>/dev/null)
     if echo "$result" | grep -q "business-service-api"; then
         log_success "Legacy API route: OK"
     else
@@ -418,7 +420,7 @@ test_internal_routing() {
     fi
 
     log_info "Testing URL rewrite (download)..."
-    result=$(ssh_run "$first_node" "curl -L -sH 'Host: business-service' http://localhost:8081/download/testtoken123 | grep -o 'token=testtoken123' || echo 'NOT FOUND'" 2>/dev/null)
+    result=$(ssh_run "$first_node" "curl -L -s -H 'Host: business-service.example.com' http://localhost:8081/download/testtoken123 | grep -o 'token=testtoken123' || echo 'NOT FOUND'" 2>/dev/null)
     if echo "$result" | grep -q "token=testtoken123"; then
         log_success "URL rewrite: OK"
     else
@@ -454,6 +456,11 @@ create_load_balancer() {
         ALB_DNS=$(aws elbv2 describe-load-balancers --names "$ALB_NAME" --query 'LoadBalancers[0].DNSName' --output text)
     else
         log_info "Creating Application Load Balancer..."
+        # TODO: HTTPS — once you have a domain + ACM certificate, switch to:
+        #   create_target_group_https.sh nomad-target-group  → HTTPS:8443 target group
+        #   create_alb_https.sh <tg-arn> <acm-cert-arn>    → HTTPS:443 listener
+        #   nomad job run infrastructure/nginx-rewrite/with-https-termination.nomad.hcl
+        # For now, uses HTTP:80 → HTTP:8081 (nginx-rewrite/job.nomad.hcl, no TLS).
         "$SCRIPT_DIR/create_alb.sh" "$TARGET_GROUP_ARN" "$ALB_NAME"
         ALB_DNS=$(aws elbv2 describe-load-balancers --names "$ALB_NAME" --query 'LoadBalancers[0].DNSName' --output text)
     fi
@@ -498,7 +505,7 @@ wait_and_test_alb() {
 
     log_info "Testing default route..."
     local result
-    result=$(curl -s "http://$ALB_DNS/" 2>/dev/null || echo "FAILED")
+    result=$(curl -s -H "Host: web-service.example.com" "http://$ALB_DNS/" 2>/dev/null || echo "FAILED")
     if echo "$result" | grep -q "hello world"; then
         log_success "ALB default route: OK"
     else
@@ -506,7 +513,7 @@ wait_and_test_alb() {
     fi
 
     log_info "Testing business-service via ALB..."
-    result=$(curl -sH "Host: business-service" "http://$ALB_DNS/" | grep -o "Name: business-service" || echo "NOT FOUND")
+    result=$(curl -s -H "Host: business-service.example.com" "http://$ALB_DNS/" | grep -o "Name: business-service" || echo "NOT FOUND")
     if echo "$result" | grep -q "business-service"; then
         log_success "ALB business-service: OK"
     else
@@ -576,10 +583,21 @@ main() {
     echo ""
     echo "ALB DNS: $ALB_DNS"
     echo ""
-    echo "Test commands:"
+    echo "Test commands (HTTP via ALB, job.nomad.hcl):"
     echo "  curl http://$ALB_DNS/"
-    echo "  curl -sH 'Host: business-service' http://$ALB_DNS/ | grep Name"
-    echo "  curl -L -sH 'Host: business-service' http://$ALB_DNS/download/mytoken123 | grep -E '(Name|GET)'"
+    echo "  curl -H 'Host: web-service.example.com' http://$ALB_DNS/"
+    echo "  curl -H 'Host: business-service.example.com' http://$ALB_DNS/ | grep Name"
+    echo "  curl -L -H 'Host: business-service.example.com' http://$ALB_DNS/download/mytoken123 | grep -E '(Name|GET)'"
+    echo ""
+    echo "  # Test HTTPS directly on node (with-https-termination.nomad.hcl, no ALB needed):"
+    echo "  curl -k -H 'Host: web-service.example.com' https://<node-dns>:8443/"
+    echo "  curl -k -H 'Host: business-service.example.com' https://<node-dns>:8443/"
+    echo "  curl -k -H 'Host: https-service.example.com' https://<node-dns>:8443/"
+    echo ""
+    echo "  # TODO: HTTPS via ALB — requires domain + ACM cert:"
+    echo "  #   1. nomad job run infrastructure/nginx-rewrite/with-https-termination.nomad.hcl"
+    echo "  #   2. ./create_target_group_https.sh nomad-target-group  (HTTPS:8443)"
+    echo "  #   3. ./create_alb_https.sh <tg-arn> <acm-cert-arn> (HTTPS:443)"
     echo ""
     echo "SSH to nodes:"
     for i in "${!NODES[@]}"; do

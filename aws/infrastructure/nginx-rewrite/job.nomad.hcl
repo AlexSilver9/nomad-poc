@@ -5,7 +5,7 @@ job "nginx-rewrite" {
 
   group "nginx" {
     network {
-      mode = "host"  # Required to bind to host port 8081 and reach Envoy at 127.0.0.1:8080
+      mode = "host"  # Required to bind to host port and reach Envoy at 127.0.0.1
     }
 
     task "nginx" {
@@ -32,40 +32,55 @@ events {
 http {
     access_log /dev/stdout;
 
-    # Upstream: Envoy ingress gateway
-    upstream envoy_ingress {
+    upstream envoy_http {
         server 127.0.0.1:8080;
     }
 
+    # business-service: explicit block for URL rewrite rules.
+    # Must be declared before default_server so nginx matches server_name first.
     server {
-        # Plain HTTP on port 8081
-        listen 8081 default_server;
-        server_name business-service;
+        listen 8081;
+        server_name business-service.example.com;
 
         # Route: /download/* with regex rewrite
-        # Transforms: /download/mytoken123 -> /business-service/download.xhtml?token=mytoken123
+        # Transforms: /download/<token> → /business-service/download.xhtml?token=<token>
+        # e.g: /download/mytoken123 -> /business-service/download.xhtml?token=mytoken123
         location ~ ^/download/(.*)$ {
             # Rewrite and proxy (internal redirect, no 302)
             rewrite ^/download/(.*)$ /business-service/download.xhtml?token=$1 break;
-            proxy_pass http://envoy_ingress;
+            proxy_pass         http://envoy_http;
             proxy_http_version 1.1;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header   Host $host;
+            proxy_set_header   X-Real-IP $remote_addr;
+            proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header   X-Forwarded-Proto $scheme;
         }
 
-        # Default: passthrough to Envoy
         location / {
-            proxy_pass http://envoy_ingress;
+            proxy_pass         http://envoy_http;
             proxy_http_version 1.1;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header   Host $host;
+            proxy_set_header   X-Real-IP $remote_addr;
+            proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header   X-Forwarded-Proto $scheme;
         }
     }
 
+    # Default catch-all: passes any hostname through to Envoy unchanged.
+    # Envoy routes by Host header — no nginx block needed per new plain HTTP service.
+    server {
+        listen 8081 default_server;
+        server_name _;
+
+        location / {
+            proxy_pass         http://envoy_http;
+            proxy_http_version 1.1;
+            proxy_set_header   Host $host;
+            proxy_set_header   X-Real-IP $remote_addr;
+            proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header   X-Forwarded-Proto $scheme;
+        }
+    }
 }
 EOF
         destination = "local/nginx.conf"

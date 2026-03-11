@@ -1,34 +1,30 @@
 #!/bin/bash
 set -euo pipefail
 
-# Create an HTTP EC2 target group for the Nomad ingress gateway.
-# Registers all running EC2 instances as targets on port 8081 (nginx HTTP listener).
-# Used for basic POC testing without a domain or ACM certificate.
-#
-# For production (HTTPS end-to-end), use create_target_group_https.sh instead.
-#
+# Create an HTTPS EC2 target group for the Nomad ingress gateway.
+# Registers all running EC2 instances as targets on port 8443 (nginx HTTPS listener).
+# The ALB terminates public TLS and re-encrypts to this target group.
+# ALB cert verification is disabled by default, so nginx's self-signed cert works fine.
 # Requires: aws-cli, jq
-# Usage: ./create_target_group.sh [target-group-name]
+# For HTTP-only POC testing, use create_target_group.sh instead.
+# Usage: ./create_target_group_https.sh [target-group-name]
 
-# Check executable dependencies
 command -v aws &>/dev/null || { echo "Error: aws-cli required"; exit 1; }
 command -v jq &>/dev/null || { echo "Error: jq required"; exit 1; }
 
-# Configuration
 TARGET_GROUP_NAME="${1:-nomad-target-group}"
-TARGET_PORT=8081
+TARGET_PORT=8443
 VPC_ID="vpc-ec926686"
 
-echo "Creating target group: ${TARGET_GROUP_NAME} (HTTP:${TARGET_PORT})"
+echo "Creating target group: ${TARGET_GROUP_NAME} (HTTPS:${TARGET_PORT})"
 
-# Create target group
 result=$(aws elbv2 create-target-group \
     --name "${TARGET_GROUP_NAME}" \
-    --protocol HTTP \
+    --protocol HTTPS \
     --port "${TARGET_PORT}" \
     --vpc-id "${VPC_ID}" \
     --target-type instance \
-    --health-check-protocol HTTP \
+    --health-check-protocol HTTPS \
     --health-check-path "/" \
     --health-check-interval-seconds 30 \
     --health-check-timeout-seconds 5 \

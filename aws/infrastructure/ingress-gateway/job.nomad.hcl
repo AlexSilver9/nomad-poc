@@ -29,15 +29,16 @@ job "ingress-gateway" {
               port     = 8080
               protocol = "http"
 
-              # IMPORTANT: More specific hosts must come before wildcards
+              # IMPORTANT: More specific hosts must come before wildcards.
+              # Hosts must match the Host header sent by nginx (i.e. the original client hostname).
               service {
                 name  = "business-service"
-                hosts = ["business-service"]
+                hosts = ["business-service.example.com"]
               }
 
               service {
                 name  = "web-service"
-                hosts = ["*"]
+                hosts = ["web-service.example.com"]
               }
             }
           }

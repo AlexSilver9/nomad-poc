@@ -34,12 +34,12 @@ job "nginx-rewrite" {
       }
 
       config {
-        image        = "alpine/openssl"
+        image        = "alpine"
         network_mode = "host"
         command      = "/bin/sh"
         args = [
           "-c",
-          "mkdir -p /alloc/tls && openssl req -x509 -newkey rsa:2048 -nodes -keyout /alloc/tls/key.pem -out /alloc/tls/cert.pem -days 3650 -subj '/CN=nomad-ingress' -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1'",
+          "apk add -q openssl && mkdir -p /alloc/tls && openssl req -x509 -newkey rsa:2048 -nodes -keyout /alloc/tls/key.pem -out /alloc/tls/cert.pem -days 3650 -subj '/CN=nomad-ingress' -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1'",
         ]
       }
 

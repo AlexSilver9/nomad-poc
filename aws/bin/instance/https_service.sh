@@ -57,10 +57,13 @@ nomad job run infrastructure/ingress-gateway/with-https-service.nomad.hcl
 echo "Ingress gateway updated (waiting for Envoy to reload...)"
 sleep 5
 
-read -p "Press Enter to switch nginx to HTTPS (port 8443)..."
+read -p "Press Enter to stop traefik-rewrite and switch nginx to HTTPS (port 8443)..."
 
-# Step 4: Switch nginx to HTTPS
-echo "=== STEP 4: Deploy nginx with HTTPS termination ==="
+# Step 4: Stop traefik (conflicts on port 8081/8443), then deploy nginx HTTPS
+echo "=== STEP 4: Stop traefik-rewrite ==="
+nomad job stop traefik-rewrite 2>/dev/null && echo "traefik-rewrite stopped" || echo "traefik-rewrite not running, skipping"
+
+echo "=== STEP 4b: Deploy nginx with HTTPS termination ==="
 nomad job run infrastructure/nginx-rewrite/with-https-termination.nomad.hcl
 echo "nginx-rewrite updated (waiting for cert generation and reload...)"
 sleep 5
@@ -94,9 +97,9 @@ echo "  curl -vk -H 'Host: business-service.example.com' https://<node-ip>:8443/
 echo "  curl -vk -H 'Host: business-service.example.com' https://<node-ip>:8443/download/mytoken123"
 echo ""
 echo "To restore the plain HTTP setup:"
-echo "  nomad job run infrastructure/ingress-gateway/job.nomad.hcl"
-echo "  nomad job run infrastructure/nginx-rewrite/job.nomad.hcl"
 echo "  nomad job stop -purge https-service"
+echo "  nomad job run infrastructure/ingress-gateway/job.nomad.hcl"
+echo "  nomad job run infrastructure/nginx-rewrite/job.nomad.hcl   # or traefik-rewrite/job.nomad.hcl"
 echo "  consul config delete -kind service-intentions -name https-service"
 echo "  consul config delete -kind service-defaults   -name https-service"
 echo "=============================================="

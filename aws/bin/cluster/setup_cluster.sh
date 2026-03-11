@@ -534,6 +534,7 @@ download_additional_scripts() {
         rolling_update.sh
         canary_update.sh
         sensitive_service.sh
+        https_service.sh
         node_drain.sh
         eval_system_jobs.sh
         file_service.sh

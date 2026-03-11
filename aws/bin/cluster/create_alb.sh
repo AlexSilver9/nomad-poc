@@ -54,7 +54,7 @@ echo "Created ALB: ${ALB_ARN}"
 echo "DNS Name:    ${ALB_DNS}"
 
 # Create listener on port 80
-echo "Creating listener on port ${LISTENER_PORT}..."
+echo "Creating http listener on default port 80..."
 listener_result=$(aws elbv2 create-listener \
     --load-balancer-arn "${ALB_ARN}" \
     --protocol HTTP \

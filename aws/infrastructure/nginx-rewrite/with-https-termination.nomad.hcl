@@ -45,7 +45,7 @@ job "nginx-rewrite" {
 
       resources {
         cpu    = 50
-        memory = 32
+        memory = 64
       }
     }
 

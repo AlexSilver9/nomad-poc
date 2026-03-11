@@ -55,17 +55,17 @@ job "https-service" {
       }
 
       config {
-        image   = "alpine/openssl"
+        image   = "alpine"
         command = "/bin/sh"
         args = [
           "-c",
-          "mkdir -p /alloc/tls && openssl req -x509 -newkey rsa:2048 -nodes -keyout /alloc/tls/key.pem -out /alloc/tls/cert.pem -days 3650 -subj '/CN=https-service.example.com' -addext 'subjectAltName=DNS:https-service.example.com,DNS:localhost'",
+          "apk add -q openssl && mkdir -p /alloc/tls && openssl req -x509 -newkey rsa:2048 -nodes -keyout /alloc/tls/key.pem -out /alloc/tls/cert.pem -days 3650 -subj '/CN=https-service.example.com' -addext 'subjectAltName=DNS:https-service.example.com,DNS:localhost'",
         ]
       }
 
       resources {
         cpu    = 50
-        memory = 32
+        memory = 64
       }
     }
 

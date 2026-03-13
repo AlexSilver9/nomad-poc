@@ -14,7 +14,7 @@ ALB_NAME="nomad-alb"
 EFS_NAME="nomad-efs"
 
 # GitHub raw URL for setup scripts
-GITHUB_RAW_BASE="https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws"
+GITHUB_RAW_BASE="https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/api-gateway/aws"
 
 # Colors for output
 RED='\033[0;31m'

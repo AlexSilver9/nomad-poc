@@ -296,6 +296,7 @@ configure_consul() {
         "services/web-service/intentions.consul.hcl"
         "services/business-service/defaults.consul.hcl"
         "services/business-service/intentions.consul.hcl"
+        "services/business-service/router.consul.hcl"
         "services/business-service-api/defaults.consul.hcl"
         "services/business-service-api/intentions.consul.hcl"
         "infrastructure/api-gateway/gateway.consul.hcl"

@@ -1,5 +1,13 @@
-# HTTPRoute for business-service.
-# Path-based routing for the business-service
+# HTTPRoute for business-service — hostname routing only.
+#
+# NOTE: Path-based routing is intentionally PARTIALLY handled here.
+# It is delegated to services/business-service/router.consul.hcl (Consul service-router).
+#
+# Reason: Consul http-route URLRewrite.Path is a full-path replacement string and cannot
+# preserve the URL suffix (e.g. /legacy-download/<token> → token is lost). The HCL config
+# entry does not support ReplacePrefixMatch despite the docs describing it for the Kubernetes
+# CRD. Confirmed on Consul 1.22.3. The service-router's PrefixRewrite does preserve the
+# suffix and is used as a workaround. See router.consul.hcl for the path routing rules.
 #
 # Apply: consul config write routes/business-service.consul.hcl
 # Delete: consul config delete -kind http-route -name business-service
@@ -9,31 +17,29 @@ Name      = "business-service"
 Hostnames = ["business-service.example.com"]
 
 Rules = [
-  # /legacy-business-service/* -> business-service-api (legacy path redirect)
+  # Example: simple full-path URLRewrite.
+  # /api -> /business-service/api
+  #
+  # This works cleanly because the rewritten path is static — there is no dynamic
+  # suffix to preserve. URLRewrite.Path replaces the entire request path with the
+  # given string, regardless of what the Matches prefix was.
+  #
+  # Contrast with the service-router workaround in router.consul.hcl:
+  # /legacy-download/<token> cannot be handled here because the token suffix would
+  # be dropped. The service-router's PrefixRewrite preserves the suffix.
   {
-    Matches = [{ Path = { Match = "prefix", Value = "/legacy-business-service" } }]
-    Services = [{ Name = "business-service-api" }]
-  },
-
-  # /legacy-download/* -> business-service with path rewrite
-  # Rewrites prefix: /legacy-download/token -> /business-service/download.xhtml/token
-  {
-    Matches = [{ Path = { Match = "prefix", Value = "/legacy-download" } }]
+    Matches = [{ Path = { Match = "prefix", Value = "/api" } }]
     Filters = [{
       Type = "URLRewrite"
       URLRewrite = {
-        Path = {
-          Type               = "ReplacePrefixMatch"
-          ReplacePrefixMatch = "/business-service/download.xhtml"
-        }
+        Path = "/business-service/api"
       }
     }]
     Services = [{ Name = "business-service" }]
   },
 
-  # Default: all other paths -> business-service
+  # Default: all other paths -> business-service (path routing handled by service-router)
   {
-    Matches  = [{ Path = { Match = "prefix", Value = "/" } }]
     Services = [{ Name = "business-service" }]
   }
 ]

@@ -9,6 +9,7 @@ set -euo pipefail
 #   Phase 1 - Bootstraps Consul ACL, creates policies + infra tokens, applies agent tokens
 #   Phase 2 - Writes Nomad's Consul token to all nodes, restarts Nomad
 #   Phase 3 - Bootstraps Nomad ACL, creates policies only (no user/service tokens)
+#   Phase 4 - Configures Nomad Workload Identity (NWI): Consul auth method + api-gateway binding rule
 #
 # Operator and user tokens are created separately by create_user_tokens.sh.
 #
@@ -27,7 +28,7 @@ SSH_USER="ec2-user"
 SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o LogLevel=ERROR"
 REMOTE_HOME="/home/$SSH_USER"
 REMOTE_ACL="$REMOTE_HOME/acl"
-GITHUB_RAW="https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main"
+GITHUB_RAW="https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/api-gateway"
 CONSUL_POLICIES_URL="$GITHUB_RAW/aws/acl/consul/policies"
 NOMAD_POLICIES_URL="$GITHUB_RAW/aws/acl/nomad/policies"
 
@@ -288,6 +289,44 @@ if [[ "$NOMAD_MGMT_TOKEN" != "<already-bootstrapped>" ]]; then
     NOMAD_TOKEN='$NOMAD_MGMT_TOKEN' nomad acl policy apply \
       -description='Node operator policy (AMI/kernel upgrades)' node-operator ${REMOTE_ACL}/nomad/policies/node-operator.policy.hcl
   "
+
+  # ─────────────────────────────────────────────────────────────
+  echo ""
+  echo "Phase 4: Configuring Nomad Workload Identity (NWI)"
+  echo "──────────────────────────────────────────────"
+
+  if [[ "$CONSUL_MGMT_TOKEN" == "<already-bootstrapped>" ]]; then
+    echo "  Skipping NWI setup: Consul was already bootstrapped in a previous run."
+    echo "  To configure manually, run on a cluster node:"
+    echo "    CONSUL_HTTP_TOKEN=<mgmt> NOMAD_TOKEN=<mgmt> nomad setup consul -y -jwks-url http://127.0.0.1:4646/.well-known/jwks.json"
+    echo "    CONSUL_HTTP_TOKEN=<mgmt> consul acl binding-rule create -method nomad-workloads -bind-type templated-policy -bind-name builtin/api-gateway -bind-vars 'Name=\${value.nomad_job_id}' -selector '\"nomad_service\" not in value and value.nomad_job_id==\"api-gateway\"'"
+  else
+    # Create the 'nomad-workloads' Consul JWT auth method and default binding rules (idempotent)
+    echo "  Running nomad setup consul..."
+    ssh_exec "$BOOTSTRAP_NODE" \
+      "CONSUL_HTTP_TOKEN='$CONSUL_MGMT_TOKEN' NOMAD_TOKEN='$NOMAD_MGMT_TOKEN' \
+       nomad setup consul -y -jwks-url http://127.0.0.1:4646/.well-known/jwks.json"
+
+    # Add a specific binding rule for the api-gateway job.
+    # The default task rule from nomad setup consul grants tasks the 'nomad-default-tasks' role (read-only).
+    # The api-gateway additionally needs builtin/api-gateway, which grants service-write for
+    # self-registration and read access to all services/nodes for xDS routing.
+    # Both rules match the setup task — Consul merges the resulting permissions.
+    echo "  Creating api-gateway NWI binding rule..."
+    ssh_exec "$BOOTSTRAP_NODE" bash << SCRIPTEOF
+CONSUL_HTTP_TOKEN=$CONSUL_MGMT_TOKEN consul acl binding-rule create \\
+  -method nomad-workloads \\
+  -bind-type templated-policy \\
+  -bind-name builtin/api-gateway \\
+  -bind-vars 'Name=\${value.nomad_job_id}' \\
+  -selector '"nomad_service" not in value and value.nomad_job_id=="api-gateway"'
+SCRIPTEOF
+
+    echo "  NWI configured."
+    echo "  — auth method: nomad-workloads"
+    echo "  — api-gateway binding rule: builtin/api-gateway (Name=api-gateway)"
+  fi
+
 fi
 
 # ─────────────────────────────────────────────────────────────
@@ -304,5 +343,7 @@ echo ""
 echo "Next steps:"
 echo "  Verify Consul UI:  http://<node>:8500  (no token required yet)"
 echo "  Verify Nomad UI:   http://<node>:4646  (Nomad management token required)"
+echo "  Verify NWI auth method: consul acl auth-method list  (should list 'nomad-workloads')"
+echo "  Restart api-gateway job to pick up NWI tokens: nomad job stop api-gateway && nomad job run infrastructure/api-gateway/job.nomad.hcl"
 echo "  Create roles + user tokens:       ./aws/bin/instance/create_user_tokens.sh  (run on a node)"
 echo "  [MAINTENANCE WINDOW] Switch Consul to deny: ./aws/bin/cluster/enforce_acl.sh"

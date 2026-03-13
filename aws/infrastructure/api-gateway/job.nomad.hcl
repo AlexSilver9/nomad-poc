@@ -1,7 +1,6 @@
 # Consul API Gateway — Nomad job.
 #
-# The Consul API Gateway has NO native Nomad jobspec integration:
-#   connect { gateway { api {} } }  ← NOT valid (causes "Blocks of type 'api' are not expected here")
+# The Consul API Gateway has no native Nomad jobspec integration.
 # Nomad's gateway stanza only supports ingress, terminating, and mesh.
 #
 # Correct approach: two-task job using 'consul connect envoy -gateway api':
@@ -10,13 +9,21 @@
 #
 # Reference: https://developer.hashicorp.com/nomad/tutorials/integrate-consul/deploy-api-gateway-on-nomad
 #
+# ACL / Nomad Workload Identity (NWI):
+#   The setup task declares an identity block (aud = ["consul.io"]). When bootstrap_acl.sh
+#   has been run, Nomad exchanges the task's JWT for a Consul token scoped to
+#   builtin/api-gateway (via the nomad-workloads auth method + binding rule). The token is
+#   injected as CONSUL_TOKEN. The setup command maps it to CONSUL_HTTP_TOKEN, which is what
+#   the Consul CLI reads.
+#
+#   Without ACL (no bootstrap_acl.sh): CONSUL_TOKEN is not set → CONSUL_HTTP_TOKEN="" →
+#   anonymous access → works because default_policy = "allow" during the no-ACL phase.
+#
 # Prerequisites:
 #   - CNI plugins installed on all nodes (done by setup_nomad_aws_ami.sh)
 #   - Consul API Gateway config entry written (infrastructure/api-gateway/gateway.consul.hcl)
 #   - Routes written (infrastructure/api-gateway/routes/*.consul.hcl)
-#   - This POC uses plain HTTP Consul (no TLS, no ACL) → no cert/token setup required.
-#     For a production setup with ACL enabled, Nomad Workload Identity and a Consul
-#     ACL binding rule for builtin/api-gateway would be needed.
+#   - For ACL: bootstrap_acl.sh must be run before enforce_acl.sh (sets up NWI + binding rule)
 #
 # Run: nomad job run infrastructure/api-gateway/job.nomad.hcl
 
@@ -55,12 +62,22 @@ job "api-gateway" {
         sidecar = false
       }
 
+      # NWI: Nomad mints a short-lived JWT (aud=consul.io) and, when bootstrap_acl.sh has
+      # configured the nomad-workloads auth method + builtin/api-gateway binding rule, exchanges
+      # it for a Consul token scoped to the api-gateway service. The token is injected as
+      # CONSUL_TOKEN. The command below maps it to CONSUL_HTTP_TOKEN (what the Consul CLI reads).
+      identity {
+        name = "consul_api_gateway"
+        aud  = ["consul.io"]
+        ttl  = "1h"
+      }
+
       config {
         image   = "hashicorp/consul:1.22.3"
         command = "/bin/sh"
         args = [
           "-c",
-          "consul connect envoy -gateway api -register -deregister-after-critical 10s -service ${NOMAD_JOB_NAME} -admin-bind 0.0.0.0:19000 -ignore-envoy-compatibility -bootstrap > ${NOMAD_ALLOC_DIR}/envoy_bootstrap.json"
+          "CONSUL_HTTP_TOKEN=$CONSUL_TOKEN consul connect envoy -gateway api -register -deregister-after-critical 10s -service ${NOMAD_JOB_NAME} -admin-bind 0.0.0.0:19000 -ignore-envoy-compatibility -bootstrap > ${NOMAD_ALLOC_DIR}/envoy_bootstrap.json"
         ]
       }
 

@@ -29,8 +29,11 @@ Rules = [
   # be dropped. The service-router's PrefixRewrite preserves the suffix.
   {
     Matches = [{ Path = { Match = "prefix", Value = "/api" } }]
+    # NOTE: No "Type" field inside Filters — the filter type is identified by the block
+    # name alone (URLRewrite, RequestHeaderModifier, etc.). The Kubernetes CRD uses a
+    # "type: URLRewrite" discriminator field, but the HCL config entry does not. Adding
+    # Type = "URLRewrite" causes: invalid config key "Rules[x].Filters.Type".
     Filters = [{
-      Type = "URLRewrite"
       URLRewrite = {
         Path = "/business-service/api"
       }

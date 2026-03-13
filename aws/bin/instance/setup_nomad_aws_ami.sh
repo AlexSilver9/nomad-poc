@@ -190,7 +190,8 @@ ${retry_join}
 }
 
 client {
-  enabled = true
+  enabled  = true
+  cni_path = "/opt/cni/bin"
 
   servers = [
 ${servers}

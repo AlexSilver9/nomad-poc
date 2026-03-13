@@ -298,13 +298,16 @@ configure_consul() {
         "services/web-service/defaults.consul.hcl"
         "services/business-service/defaults.consul.hcl"
         "services/business-service-api/defaults.consul.hcl"
+        "services/https-service/defaults.consul.hcl"
         "services/web-service/intentions.consul.hcl"
         "services/business-service/intentions.consul.hcl"
         "services/business-service-api/intentions.consul.hcl"
+        "services/https-service/intentions.consul.hcl"
         "services/business-service/router.consul.hcl"
         "infrastructure/api-gateway/gateway.consul.hcl"
         "infrastructure/api-gateway/routes/web-service.consul.hcl"
         "infrastructure/api-gateway/routes/business-service.consul.hcl"
+        "infrastructure/api-gateway/routes/https-service.consul.hcl"
     )
     for file in "${consul_files[@]}"; do
         local dir=$(dirname "$file")

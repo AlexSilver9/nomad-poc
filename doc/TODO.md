@@ -36,7 +36,6 @@
     - Consul KV -> Dynamic -> Runtime update of vars (pendant to CM), secret management, ACLs
     - Nomad Variables -> Dynamic -> Runtime update of vars -> secret management, ACLs
 - Rollenkonzept für personalisierte User (alice, bob)
-
 - Rename main -> master
 - Rename "nomad-deployer", "nomad-operator", "consul-readwrite"
 - Volumes mappen
@@ -45,7 +44,6 @@
     -> chown -R 1111:1111 (parara)
     -> redeploy with purge
 - Exec into alloc (Start interactive shell / run command on running container)
-
 - Deploy/Undeploy Script: deploy <service name>
 - Token Revoke Scripts (Script für Token Löschung)
 - 2 Repos:
@@ -56,15 +54,15 @@
 
 # TODO:
 sudo git pull origin master --rebase
-
+- Zugriff Container Definitionen
 - ACLs aktiv setzen
 - SSL -> ALB -> Nginx SSL -> Payara SSL
     - Wie kommt man an den Hostname im Request
     - Kein Portmapping im ALB
 - Scripts Branches
     - main (prod)
-    - staging
-    - dev
+    - staging (3-5 Nodes)
+    - dev (1 Node)
 
 - Update CheatSheet
 - Document Consul ACL Reset: https://developer.hashicorp.com/consul/docs/secure/acl/reset

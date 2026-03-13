@@ -292,13 +292,16 @@ configure_consul() {
     # Download Consul config files to first node from GitHub
     log_info "Downloading Consul config files to $first_node..."
     local consul_files=(
+        # service-defaults must come before any router that references the service,
+        # otherwise Consul evaluates the discovery chain with the default tcp protocol
+        # and rejects the router with an inconsistent-protocol error.
         "services/web-service/defaults.consul.hcl"
-        "services/web-service/intentions.consul.hcl"
         "services/business-service/defaults.consul.hcl"
-        "services/business-service/intentions.consul.hcl"
-        "services/business-service/router.consul.hcl"
         "services/business-service-api/defaults.consul.hcl"
+        "services/web-service/intentions.consul.hcl"
+        "services/business-service/intentions.consul.hcl"
         "services/business-service-api/intentions.consul.hcl"
+        "services/business-service/router.consul.hcl"
         "infrastructure/api-gateway/gateway.consul.hcl"
         "infrastructure/api-gateway/routes/web-service.consul.hcl"
         "infrastructure/api-gateway/routes/business-service.consul.hcl"

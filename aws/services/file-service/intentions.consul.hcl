@@ -1,4 +1,4 @@
-# Allow ingress-gateway to connect to file-service
+# Allow api-gateway to connect to file-service
 # https://developer.hashicorp.com/consul/docs/secure-mesh/intention
 
 # `consul config write intentions.consul.hcl`
@@ -8,7 +8,7 @@ Name = "file-service"
 
 Sources = [
   {
-    Name   = "ingress-gateway"
+    Name   = "api-gateway"
     Action = "allow"
   }
 ]

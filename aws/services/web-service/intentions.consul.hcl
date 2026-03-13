@@ -1,4 +1,4 @@
-# Allow ingress-gateway to connect to web-service
+# Allow api-gateway to connect to web-service
 # https://developer.hashicorp.com/consul/docs/secure-mesh/intention
 
 # `consul config write web-service-intentions.hcl`
@@ -8,7 +8,7 @@ Name = "web-service"
 
 Sources = [
   {
-    Name   = "ingress-gateway"
+    Name   = "api-gateway"
     Action = "allow"
   }
 ]

@@ -3,14 +3,14 @@ set -euo pipefail
 
 # Demonstrates a Rolling Update with traffic routing via ALB.
 #
-# This script updates the ingress gateway to include rolling-update-service,
-# runs the demo, then restores the original ingress gateway config.
+# This script adds a rolling-update-service route to the api-gateway,
+# runs the demo, then removes the route on cleanup.
 #
 # Each step pauses for verification in the Nomad UI before proceeding.
 #
 # Usage: ./rolling_update.sh
 
-GITHUB_RAW_BASE="https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws"
+GITHUB_RAW_BASE="https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/api-gateway/aws"
 JOB_FILE="services/rolling-update-service/job.nomad.hcl"
 JOB_NAME="rolling-update-service"
 OLD_IMAGE="traefik/whoami:v1.10.0"
@@ -18,26 +18,24 @@ NEW_IMAGE="traefik/whoami:v1.11.0"
 
 # Step 1: Download required files from GitHub
 echo "=== STEP 1: Download required files ==="
-mkdir -p services/rolling-update-service infrastructure/ingress-gateway
+mkdir -p services/rolling-update-service infrastructure/api-gateway/routes
 wget -q -O "$JOB_FILE" "$GITHUB_RAW_BASE/$JOB_FILE"
 wget -q -O services/rolling-update-service/defaults.consul.hcl "$GITHUB_RAW_BASE/services/rolling-update-service/defaults.consul.hcl"
 wget -q -O services/rolling-update-service/intentions.consul.hcl "$GITHUB_RAW_BASE/services/rolling-update-service/intentions.consul.hcl"
-wget -q -O infrastructure/ingress-gateway/job.nomad.hcl "$GITHUB_RAW_BASE/infrastructure/ingress-gateway/job.nomad.hcl"
-wget -q -O infrastructure/ingress-gateway/with-rolling-update.nomad.hcl "$GITHUB_RAW_BASE/infrastructure/ingress-gateway/with-rolling-update.nomad.hcl"
-echo "Downloaded job, Consul config, and ingress gateway files"
+wget -q -O infrastructure/api-gateway/routes/rolling-update-service.consul.hcl "$GITHUB_RAW_BASE/infrastructure/api-gateway/routes/rolling-update-service.consul.hcl"
+echo "Downloaded job, Consul config, and route files"
 
-read -p "Press Enter to apply Consul configurations and update ingress gateway..."
+read -p "Press Enter to apply Consul configurations and add api-gateway route..."
 
-# Step 2: Apply Consul configurations and update ingress gateway
+# Step 2: Apply Consul configurations and add api-gateway route
 echo "=== STEP 2: Apply Consul configurations ==="
 consul config write services/rolling-update-service/defaults.consul.hcl
 consul config write services/rolling-update-service/intentions.consul.hcl
 echo "Consul service-defaults and intentions applied"
 
-echo "=== Updating ingress gateway to include rolling-update-service ==="
-nomad job run infrastructure/ingress-gateway/with-rolling-update.nomad.hcl
-echo "Ingress gateway updated (waiting for Envoy to reload...)"
-sleep 5
+echo "=== Adding rolling-update-service route to api-gateway ==="
+consul config write infrastructure/api-gateway/routes/rolling-update-service.consul.hcl
+echo "Route added (Envoy reloads automatically)"
 
 read -p "Press Enter to run the initial deployment..."
 
@@ -97,7 +95,7 @@ echo "Removing Consul config entries..."
 consul config delete -kind service-intentions -name "$JOB_NAME" || true
 consul config delete -kind service-defaults -name "$JOB_NAME" || true
 
-echo "Restoring original ingress gateway..."
-nomad job run infrastructure/ingress-gateway/job.nomad.hcl
+echo "Removing rolling-update-service route from api-gateway..."
+consul config delete -kind http-route -name "$JOB_NAME" || true
 
 echo "Done"

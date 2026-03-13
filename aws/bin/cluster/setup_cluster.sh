@@ -282,7 +282,7 @@ install_nomad() {
 }
 
 #------------------------------------------------------------------------------
-# STEP 6: Configure Consul (service-defaults, router, ingress, intentions)
+# STEP 6: Configure Consul (service-defaults, intentions, api-gateway routes)
 #------------------------------------------------------------------------------
 configure_consul() {
     log_info "=== STEP 6: Configuring Consul service mesh ==="
@@ -290,19 +290,20 @@ configure_consul() {
     local first_node="${NODES[0]}"
 
     # Download Consul config files to first node from GitHub
-    # Note: ingress-gateway routing is defined in the Nomad job,
-    # not in a separate Consul config entry, to avoid conflicts
     log_info "Downloading Consul config files to $first_node..."
     local consul_files=(
         "services/web-service/defaults.consul.hcl"
-        "services/business-service/defaults.consul.hcl"
-        "services/business-service-api/defaults.consul.hcl"
-        "services/business-service/router.consul.hcl"
         "services/web-service/intentions.consul.hcl"
+        "services/business-service/defaults.consul.hcl"
+        "services/business-service/intentions.consul.hcl"
+        "services/business-service-api/defaults.consul.hcl"
+        "services/business-service-api/intentions.consul.hcl"
+        "infrastructure/api-gateway/gateway.consul.hcl"
+        "infrastructure/api-gateway/routes/web-service.consul.hcl"
+        "infrastructure/api-gateway/routes/business-service.consul.hcl"
     )
     for file in "${consul_files[@]}"; do
         local dir=$(dirname "$file")
-        local basename=$(basename "$file")
         ssh_run "$first_node" "mkdir -p $dir && wget -q -O $file $GITHUB_RAW_BASE/$file"
     done
 
@@ -322,8 +323,9 @@ configure_consul() {
     log_info "Verifying Consul configurations..."
     ssh_run "$first_node" "consul config read -kind service-defaults -name web-service" || log_warn "web-service defaults not found"
     ssh_run "$first_node" "consul config read -kind service-defaults -name business-service" || log_warn "business-service defaults not found"
+    ssh_run "$first_node" "consul config read -kind http-route -name web-service" || log_warn "web-service route not found"
+    ssh_run "$first_node" "consul config read -kind http-route -name business-service" || log_warn "business-service route not found"
     log_success "Consul service configurations verified"
-    # Note: ingress-gateway config is created when the Nomad job runs (Step 6)
 }
 
 #------------------------------------------------------------------------------
@@ -334,10 +336,10 @@ run_nomad_jobs() {
 
     local first_node="${NODES[0]}"
 
-    # Nomad job files (order matters: traefik first, then ingress, then services)
+    # Nomad job files (order matters: traefik first, then api-gateway, then services)
     local nomad_jobs=(
         "infrastructure/traefik-rewrite/job.nomad.hcl"
-        "infrastructure/ingress-gateway/job.nomad.hcl"
+        "infrastructure/api-gateway/job.nomad.hcl"
         "services/web-service/job.nomad.hcl"
         "services/business-service/job.nomad.hcl"
     )
@@ -362,21 +364,15 @@ run_nomad_jobs() {
     log_info "Checking job status..."
     ssh_run "$first_node" "nomad status"
 
-    # Verify ingress gateway config was created by Nomad job
-    log_info "Verifying ingress-gateway configuration..."
-    local ingress_config
-    ingress_config=$(ssh_run "$first_node" "consul config read -kind ingress-gateway -name ingress-gateway" 2>/dev/null || echo "")
-    if [[ -z "$ingress_config" ]]; then
-        log_error "ingress-gateway config not found after running Nomad job"
-        exit 1
+    # Verify api-gateway job is running
+    log_info "Verifying api-gateway job..."
+    local gw_status
+    gw_status=$(ssh_run "$first_node" "nomad job status api-gateway 2>/dev/null | grep -c running" || echo "0")
+    if [[ "$gw_status" -eq 0 ]]; then
+        log_warn "api-gateway allocations not yet running — check 'nomad job status api-gateway'"
+    else
+        log_success "api-gateway running ($gw_status allocation(s))"
     fi
-    if ! echo "$ingress_config" | grep -q "business-service"; then
-        log_error "ingress-gateway config is missing business-service!"
-        log_error "Config content:"
-        echo "$ingress_config"
-        exit 1
-    fi
-    log_success "ingress-gateway config verified (includes business-service)"
 
     log_success "Nomad jobs started"
 }

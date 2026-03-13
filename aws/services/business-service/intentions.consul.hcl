@@ -1,9 +1,8 @@
-# Allow api-gateway to connect to https-service
-#
+# Allow api-gateway to connect to business-service
 # Apply: consul config write intentions.consul.hcl
 
 Kind = "service-intentions"
-Name = "https-service"
+Name = "business-service"
 
 Sources = [
   {

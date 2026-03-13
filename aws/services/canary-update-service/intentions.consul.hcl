@@ -1,4 +1,4 @@
-# Allow ingress-gateway to connect to canary-update-service
+# Allow api-gateway to connect to canary-update-service
 # https://developer.hashicorp.com/consul/docs/secure-mesh/intention
 #
 # Apply: consul config write canary-update-service-intentions.hcl
@@ -8,7 +8,7 @@ Name = "canary-update-service"
 
 Sources = [
   {
-    Name   = "ingress-gateway"
+    Name   = "api-gateway"
     Action = "allow"
   }
 ]

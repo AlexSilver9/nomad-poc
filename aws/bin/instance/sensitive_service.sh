@@ -12,32 +12,30 @@ set -euo pipefail
 #
 # Usage: ./sensitive_service.sh
 
-GITHUB_RAW_BASE="https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws"
+GITHUB_RAW_BASE="https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/api-gateway/aws"
 JOB_FILE="services/sensitive-service/job.nomad.hcl"
 JOB_NAME="sensitive-service"
 
 # Step 1: Download required files from GitHub
 echo "=== STEP 1: Download required files ==="
-mkdir -p services/sensitive-service infrastructure/ingress-gateway
+mkdir -p services/sensitive-service infrastructure/api-gateway/routes
 wget -q -O "$JOB_FILE" "$GITHUB_RAW_BASE/$JOB_FILE"
 wget -q -O services/sensitive-service/defaults.consul.hcl "$GITHUB_RAW_BASE/services/sensitive-service/defaults.consul.hcl"
 wget -q -O services/sensitive-service/intentions.consul.hcl "$GITHUB_RAW_BASE/services/sensitive-service/intentions.consul.hcl"
-wget -q -O infrastructure/ingress-gateway/job.nomad.hcl "$GITHUB_RAW_BASE/infrastructure/ingress-gateway/job.nomad.hcl"
-wget -q -O infrastructure/ingress-gateway/with-sensitive-service.nomad.hcl "$GITHUB_RAW_BASE/infrastructure/ingress-gateway/with-sensitive-service.nomad.hcl"
-echo "Downloaded job, Consul config, and ingress gateway files"
+wget -q -O infrastructure/api-gateway/routes/sensitive-service.consul.hcl "$GITHUB_RAW_BASE/infrastructure/api-gateway/routes/sensitive-service.consul.hcl"
+echo "Downloaded job, Consul config, and route files"
 
-read -p "Press Enter to apply Consul configurations and update ingress gateway..."
+read -p "Press Enter to apply Consul configurations and add api-gateway route..."
 
-# Step 2: Apply Consul configurations and update ingress gateway
+# Step 2: Apply Consul configurations and add api-gateway route
 echo "=== STEP 2: Apply Consul configurations ==="
 consul config write services/sensitive-service/defaults.consul.hcl
 consul config write services/sensitive-service/intentions.consul.hcl
 echo "Consul service-defaults and intentions applied"
 
-echo "=== Updating ingress gateway to include sensitive-service ==="
-nomad job run infrastructure/ingress-gateway/with-sensitive-service.nomad.hcl
-echo "Ingress gateway updated (waiting for Envoy to reload...)"
-sleep 5
+echo "=== Adding sensitive-service route to api-gateway ==="
+consul config write infrastructure/api-gateway/routes/sensitive-service.consul.hcl
+echo "Route added (Envoy reloads automatically)"
 
 read -p "Press Enter to deploy sensitive-service to the isolated node pool..."
 
@@ -85,7 +83,7 @@ echo "Removing Consul config entries..."
 consul config delete -kind service-intentions -name "$JOB_NAME" || true
 consul config delete -kind service-defaults -name "$JOB_NAME" || true
 
-echo "Restoring original ingress gateway..."
-nomad job run infrastructure/ingress-gateway/job.nomad.hcl
+echo "Removing sensitive-service route from api-gateway..."
+consul config delete -kind http-route -name "$JOB_NAME" || true
 
 echo "Done"

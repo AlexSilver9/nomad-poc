@@ -5,7 +5,7 @@ set -euo pipefail
 #
 # This script:
 #   1. Applies Consul service-defaults (TCP protocol) and intentions for https-service
-#   2. Switches the ingress gateway to the variant with the TCP listener on port 8082
+#   2. Adds the TCPRoute to the api-gateway (TCP listener on port 8082 is always present)
 #   3. Switches nginx-rewrite to the HTTPS variant (port 8443, self-signed cert)
 #   4. Deploys https-service (nginx serving HTTPS with a self-signed cert)
 #
@@ -19,24 +19,24 @@ set -euo pipefail
 #                                          → envoy_tcp:8082  (https-service, TLS passthrough)
 #
 # To restore the plain HTTP setup:
-#   nomad job run infrastructure/ingress-gateway/job.nomad.hcl
-#   nomad job run infrastructure/nginx-rewrite/job.nomad.hcl
 #   nomad job stop -purge https-service
+#   consul config delete -kind tcp-route         -name https-service
 #   consul config delete -kind service-intentions -name https-service
 #   consul config delete -kind service-defaults   -name https-service
+#   nomad job run infrastructure/nginx-rewrite/job.nomad.hcl
 #
 # Usage: ./https_service.sh
 
-GITHUB_RAW_BASE="https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws"
+GITHUB_RAW_BASE="https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/api-gateway/aws"
 
 # Step 1: Download required files from GitHub
 echo "=== STEP 1: Download required files ==="
-mkdir -p services/https-service infrastructure/ingress-gateway infrastructure/nginx-rewrite
+mkdir -p services/https-service infrastructure/api-gateway/routes infrastructure/nginx-rewrite
 wget -q -O services/https-service/job.nomad.hcl              "$GITHUB_RAW_BASE/services/https-service/job.nomad.hcl"
 wget -q -O services/https-service/defaults.consul.hcl        "$GITHUB_RAW_BASE/services/https-service/defaults.consul.hcl"
 wget -q -O services/https-service/intentions.consul.hcl      "$GITHUB_RAW_BASE/services/https-service/intentions.consul.hcl"
-wget -q -O infrastructure/ingress-gateway/with-https-service.nomad.hcl \
-    "$GITHUB_RAW_BASE/infrastructure/ingress-gateway/with-https-service.nomad.hcl"
+wget -q -O infrastructure/api-gateway/routes/https-service.consul.hcl \
+    "$GITHUB_RAW_BASE/infrastructure/api-gateway/routes/https-service.consul.hcl"
 wget -q -O infrastructure/nginx-rewrite/with-https-termination.nomad.hcl \
     "$GITHUB_RAW_BASE/infrastructure/nginx-rewrite/with-https-termination.nomad.hcl"
 echo "Downloaded all required files"
@@ -49,13 +49,14 @@ consul config write services/https-service/defaults.consul.hcl
 consul config write services/https-service/intentions.consul.hcl
 echo "Consul service-defaults (TCP) and intentions applied"
 
-read -p "Press Enter to update ingress gateway (adds TCP listener on port 8082)..."
+read -p "Press Enter to add https-service TCPRoute to api-gateway..."
 
-# Step 3: Update ingress gateway
-echo "=== STEP 3: Update ingress gateway ==="
-nomad job run infrastructure/ingress-gateway/with-https-service.nomad.hcl
-echo "Ingress gateway updated (waiting for Envoy to reload...)"
-sleep 5
+# Step 3: Add TCPRoute to api-gateway
+# Note: the TCP listener on port 8082 is always present in the api-gateway config.
+# Adding the route activates routing to https-service on that listener.
+echo "=== STEP 3: Add https-service TCPRoute ==="
+consul config write infrastructure/api-gateway/routes/https-service.consul.hcl
+echo "TCPRoute added (Envoy reloads automatically)"
 
 read -p "Press Enter to stop traefik-rewrite and switch nginx to HTTPS (port 8443)..."
 
@@ -98,8 +99,8 @@ echo "  curl -vk -H 'Host: business-service.example.com' https://<node-ip>:8443/
 echo ""
 echo "To restore the plain HTTP setup:"
 echo "  nomad job stop -purge https-service"
-echo "  nomad job run infrastructure/ingress-gateway/job.nomad.hcl"
-echo "  nomad job run infrastructure/nginx-rewrite/job.nomad.hcl   # or traefik-rewrite/job.nomad.hcl"
+echo "  consul config delete -kind tcp-route          -name https-service"
 echo "  consul config delete -kind service-intentions -name https-service"
 echo "  consul config delete -kind service-defaults   -name https-service"
+echo "  nomad job run infrastructure/nginx-rewrite/job.nomad.hcl"
 echo "=============================================="

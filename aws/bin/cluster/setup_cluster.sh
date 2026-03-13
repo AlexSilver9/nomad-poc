@@ -311,7 +311,10 @@ configure_consul() {
     )
     for file in "${consul_files[@]}"; do
         local dir=$(dirname "$file")
-        ssh_run "$first_node" "mkdir -p $dir && wget -q -O $file $GITHUB_RAW_BASE/$file"
+        if ! ssh_run "$first_node" "mkdir -p $dir && wget -q -O $file $GITHUB_RAW_BASE/$file"; then
+            log_error "Failed to download $file from $GITHUB_RAW_BASE/$file"
+            exit 1
+        fi
     done
 
     # Apply Consul configurations
@@ -326,12 +329,20 @@ configure_consul() {
 
     log_success "Consul configurations applied"
 
-    # Verify
+    # Verify — check all service-defaults explicitly (they must be applied before routers)
     log_info "Verifying Consul configurations..."
-    ssh_run "$first_node" "consul config read -kind service-defaults -name web-service" || log_warn "web-service defaults not found"
-    ssh_run "$first_node" "consul config read -kind service-defaults -name business-service" || log_warn "business-service defaults not found"
-    ssh_run "$first_node" "consul config read -kind http-route -name web-service" || log_warn "web-service route not found"
-    ssh_run "$first_node" "consul config read -kind http-route -name business-service" || log_warn "business-service route not found"
+    local verify_failed=0
+    for svc in web-service business-service business-service-api https-service; do
+        if ! ssh_run "$first_node" "consul config read -kind service-defaults -name $svc" &>/dev/null; then
+            log_error "service-defaults/$svc not found — defaults must be applied before routers"
+            verify_failed=1
+        fi
+    done
+    ssh_run "$first_node" "consul config read -kind http-route -name web-service" &>/dev/null || { log_error "http-route/web-service not found"; verify_failed=1; }
+    ssh_run "$first_node" "consul config read -kind http-route -name business-service" &>/dev/null || { log_error "http-route/business-service not found"; verify_failed=1; }
+    ssh_run "$first_node" "consul config read -kind tcp-route -name https-service" &>/dev/null || { log_error "tcp-route/https-service not found"; verify_failed=1; }
+    ssh_run "$first_node" "consul config read -kind service-router -name business-service" &>/dev/null || { log_error "service-router/business-service not found"; verify_failed=1; }
+    [[ $verify_failed -eq 0 ]] || { log_error "One or more Consul config entries are missing. Check the errors above."; exit 1; }
     log_success "Consul service configurations verified"
 }
 

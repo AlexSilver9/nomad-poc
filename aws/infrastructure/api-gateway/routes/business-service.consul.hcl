@@ -1,13 +1,15 @@
 # HTTPRoute for business-service — hostname routing only.
 #
-# NOTE: Path-based routing is intentionally PARTIALLY handled here.
-# It is delegated to services/business-service/router.consul.hcl (Consul service-router).
+# NOTE: URLRewrite.Path is a full-path replacement — it cannot preserve URL suffixes.
+# /legacy-download/<token> cannot be rewritten to /business-service/download.xhtml/<token>
+# because the token suffix would be dropped. The HCL config entry does not support
+# ReplacePrefixMatch (available in the Kubernetes CRD but not the HCL equivalent).
+# Confirmed on Consul 1.22.3.
 #
-# Reason: Consul http-route URLRewrite.Path is a full-path replacement string and cannot
-# preserve the URL suffix (e.g. /legacy-download/<token> → token is lost). The HCL config
-# entry does not support ReplacePrefixMatch despite the docs describing it for the Kubernetes
-# CRD. Confirmed on Consul 1.22.3. The service-router's PrefixRewrite does preserve the
-# suffix and is used as a workaround. See router.consul.hcl for the path routing rules.
+# The service-router's PrefixRewrite (router.consul.hcl) does preserve suffixes, but
+# it only applies to east-west (service-to-service) traffic — NOT to requests routed
+# through the API Gateway. Testing confirmed: upstream receives the original path unchanged.
+# See router.consul.hcl for available workaround options.
 #
 # Apply: consul config write routes/business-service.consul.hcl
 # Delete: consul config delete -kind http-route -name business-service

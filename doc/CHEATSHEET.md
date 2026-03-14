@@ -62,8 +62,13 @@ nomad alloc exec -task=<task-name> <allocation-id> <command>
 Logs:
 ```shell
 nomad logs -f <allocation-id>
+# or when alloc has multiple tasks
+nomad logs -f <allocation-id> <task-name>
+
 # or
 nomad alloc logs -f <allocation-id>
+# or when alloc has multiple tasks
+nomad alloc logs -f <allocation-id> <task-name>
 ```
 
 Stop job:
@@ -138,6 +143,47 @@ nomad node drain -enable -yes <node-id>
 Node Drain Disable
 ```shell
 nomad node drain -disable -yes <node-id>
+```
+
+## Consul — Service Health
+
+Check health of a service (via HTTP API):
+```shell
+curl -s http://localhost:8500/v1/health/service/<service-name> | jq '.[].Checks[].Status'
+```
+
+## Consul — Config Entries
+
+List config entries by kind:
+```shell
+consul config list -kind api-gateway
+consul config list -kind http-route
+consul config list -kind tcp-route
+consul config list -kind service-router
+consul config list -kind service-intentions
+consul config list -kind service-defaults
+```
+
+Read a specific config entry:
+```shell
+consul config read -kind api-gateway -name api-gateway
+```
+
+## Consul — ACL
+
+List all tokens:
+```shell
+consul acl token list
+```
+
+List configured auth methods:
+```shell
+consul acl auth-method list
+```
+
+List NWI (Nomad Workload Identity) binding rules:
+```shell
+consul acl binding-rule list -method nomad-workloads
 ```
 
 # Job Specification

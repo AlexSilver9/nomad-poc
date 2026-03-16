@@ -145,7 +145,7 @@ http:
       replacePathRegex:
         # Captures the token and rewrites to a query parameter.
         regex: "^/download/(.*)"
-        replacement: "/business-service/download.xhtml?token=$${1}"
+        replacement: "/business-service/download.xhtml?token=$$1"
 
   services:
     # Plain HTTP to API Gateway HTTP listener

@@ -357,16 +357,22 @@ run_nomad_jobs() {
     # Nomad job files to run (order matters: traefik first, then api-gateway, then services)
     local nomad_jobs=(
         "infrastructure/traefik-rewrite/job.nomad.hcl"
-        "infrastructure/nginx-rewrite/job.nomad.hcl"
         "infrastructure/api-gateway/job.nomad.hcl"
         "services/web-service/job.nomad.hcl"
         "services/business-service/job.nomad.hcl"
         "services/https-service/job.nomad.hcl"
     )
 
+    # Additional files to download but not run automatically. nginx is an optional alternative to traefik — switch with:
+    #   nomad job stop traefik-rewrite
+    #   nomad job run infrastructure/nginx-rewrite/job.nomad.hcl
+    local nomad_extra=(
+        "infrastructure/nginx-rewrite/job.nomad.hcl"
+    )
+
     # Download all job files from GitHub
     log_info "Downloading Nomad job files to $first_node..."
-    for file in "${nomad_jobs[@]}"; do
+    for file in "${nomad_jobs[@]}" "${nomad_extra[@]}"; do
         local dir=$(dirname "$file")
         if ! ssh_run "$first_node" "mkdir -p $dir && wget -q -O $file $GITHUB_RAW_BASE/$file"; then
             log_error "Failed to download $file from $GITHUB_RAW_BASE/$file"
@@ -479,7 +485,7 @@ create_load_balancer() {
         # TODO: HTTPS — once you have a domain + ACM certificate, switch to:
         #   create_target_group_https.sh nomad-target-group  → HTTPS:8443 target group
         #   create_alb_https.sh <tg-arn> <acm-cert-arn>    → HTTPS:443 listener
-        #   nomad job run infrastructure/nginx-rewrite/job.nomad.hcl
+        #   nomad job run infrastructure/nginx-rewrite/with-https-termination.nomad.hcl
         # For now, uses HTTP:80 → HTTP:8081 (nginx-rewrite/job.nomad.hcl, no TLS).
         "$SCRIPT_DIR/create_alb.sh" "$TARGET_GROUP_ARN" "$ALB_NAME"
         ALB_DNS=$(aws elbv2 describe-load-balancers --names "$ALB_NAME" --query 'LoadBalancers[0].DNSName' --output text)
@@ -554,6 +560,7 @@ download_additional_scripts() {
         rolling_update.sh
         canary_update.sh
         sensitive_service.sh
+        https_service.sh
         node_drain.sh
         eval_system_jobs.sh
         file_service.sh
@@ -609,13 +616,13 @@ main() {
     echo "  curl -H 'Host: business-service.example.com' http://$ALB_DNS/ | grep Name"
     echo "  curl -L -H 'Host: business-service.example.com' http://$ALB_DNS/download/mytoken123 | grep -E '(Name|GET)'"
     echo ""
-    echo "  # Test HTTPS directly on node (nginx-rewrite/job.nomad.hcl includes TLS termination on :8443):"
+    echo "  # Test HTTPS directly on node (with-https-termination.nomad.hcl, no ALB needed):"
     echo "  curl -k -H 'Host: web-service.example.com' https://<node-dns>:8443/"
     echo "  curl -k -H 'Host: business-service.example.com' https://<node-dns>:8443/"
     echo "  curl -k -H 'Host: https-service.example.com' https://<node-dns>:8443/"
     echo ""
     echo "  # TODO: HTTPS via ALB — requires domain + ACM cert:"
-    echo "  #   1. nomad job run infrastructure/nginx-rewrite/job.nomad.hcl  (already downloaded)"
+    echo "  #   1. nomad job run infrastructure/nginx-rewrite/with-https-termination.nomad.hcl"
     echo "  #   2. ./create_target_group_https.sh nomad-target-group  (HTTPS:8443)"
     echo "  #   3. ./create_alb_https.sh <tg-arn> <acm-cert-arn> (HTTPS:443)"
     echo ""

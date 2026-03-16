@@ -227,7 +227,7 @@ echo "────────────────────────�
 if [[ -z "$CONSUL_NOMAD_TOKEN" ]]; then
   echo "  Consul ACL was already bootstrapped in a previous run."
   echo "  Cannot write Nomad Consul token without knowing it."
-  echo "  Write it manually: sudo tee /etc/nomad.d/consul-token.hcl on each node."
+  echo "  Write it manually: sudo tee /etc/nomad.d/consul.hcl on each node (include address, grpc_address, token, service_identity)."
   echo "  Then restart Nomad: sudo systemctl restart nomad"
   echo ""
 else
@@ -252,6 +252,8 @@ consul {
   }
 }
 HCLEOF
+  # Remove legacy file from old installs (token was previously in a separate file)
+  ssh_exec "$node" "sudo rm -f /etc/nomad.d/consul-token.hcl"
 done
 
 echo "  Rolling restart Nomad (one node at a time)..."
@@ -367,7 +369,7 @@ echo "IMPORTANT: Securely store these tokens before deleting the output file!"
 echo ""
 echo "  Consul/Nomad management tokens  → product owner → password manager (ACL admin only)"
 echo "  Consul agent token              → applied to all nodes automatically"
-echo "  Consul nomad token              → written to /etc/nomad.d/consul-token.hcl"
+echo "  Consul nomad token              → written to /etc/nomad.d/consul.hcl (with address, grpc_address, service_identity)"
 echo ""
 echo "Next steps:"
 echo "  Verify Consul UI:  http://<node>:8500  (no token required yet)"

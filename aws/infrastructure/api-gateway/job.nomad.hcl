@@ -12,11 +12,11 @@
 # ACL / Nomad Workload Identity (NWI):
 #   The setup task declares an identity block (aud = ["consul.io"]). Nomad writes the signed
 #   JWT to ${NOMAD_SECRETS_DIR}/consul_api_gateway — it does NOT automatically exchange it
-#   for a Consul token. The setup command explicitly calls 'consul acl login' to exchange the
+#   for a Consul token. The setup command explicitly calls 'consul login' to exchange the
 #   JWT for a scoped Consul token via the nomad-workloads auth method + builtin/api-gateway
 #   binding rule, then passes the token to 'consul connect envoy' via CONSUL_HTTP_TOKEN.
 #
-#   The 'consul acl login' call falls back gracefully (|| true) so the job works even before
+#   The 'consul login' call falls back gracefully (|| true) so the job works even before
 #   bootstrap_acl.sh is run. In that case CONSUL_HTTP_TOKEN="" → anonymous access → works
 #   because default_policy = "allow" before enforce_acl.sh is run.
 #
@@ -64,7 +64,7 @@ job "api-gateway" {
       }
 
       # NWI: Nomad writes the JWT to ${NOMAD_SECRETS_DIR}/consul_api_gateway.
-      # The command below explicitly exchanges it for a Consul token via consul acl login.
+      # The command below explicitly exchanges it for a Consul token via consul login.
       # Falls back gracefully (|| true) when ACL is not yet bootstrapped.
       identity {
         name = "consul_api_gateway"
@@ -78,7 +78,7 @@ job "api-gateway" {
         args = [
           "-c",
           join(" && ", [
-            "consul acl login -method nomad-workloads -bearer-token-file ${NOMAD_SECRETS_DIR}/consul_api_gateway -token-sink-file ${NOMAD_ALLOC_DIR}/consul.token",
+            "consul login -method nomad-workloads -bearer-token-file ${NOMAD_SECRETS_DIR}/consul_api_gateway -token-sink-file ${NOMAD_ALLOC_DIR}/consul.token 2>/dev/null || true",
             "export CONSUL_HTTP_TOKEN=$(cat ${NOMAD_ALLOC_DIR}/consul.token 2>/dev/null || echo '')",
             "consul connect envoy -gateway api -register -deregister-after-critical 10s -service ${NOMAD_JOB_NAME} -admin-bind 0.0.0.0:19000 -ignore-envoy-compatibility -bootstrap > ${NOMAD_ALLOC_DIR}/envoy_bootstrap.json"
           ])

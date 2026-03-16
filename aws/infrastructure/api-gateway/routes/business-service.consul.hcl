@@ -1,15 +1,14 @@
-# HTTPRoute for business-service — hostname routing only.
+# HTTPRoute for business-service — hostname routing and static path rewrites.
 #
-# NOTE: URLRewrite.Path is a full-path replacement — it cannot preserve URL suffixes.
-# /legacy-download/<token> cannot be rewritten to /business-service/download.xhtml/<token>
-# because the token suffix would be dropped. The HCL config entry does not support
-# ReplacePrefixMatch (available in the Kubernetes CRD but not the HCL equivalent).
-# Confirmed on Consul 1.22.3.
+# NOTE: URLRewrite.Path is a full-path replacement only — it cannot preserve URL suffixes.
+# Suffix-preserving regex rewrite (e.g. /legacy-download/<token>) is handled upstream by
+# Traefik before the request reaches the API Gateway. By the time the API Gateway sees
+# the request, the path is already rewritten.
 #
-# The service-router's PrefixRewrite (router.consul.hcl) does preserve suffixes, but
-# it only applies to east-west (service-to-service) traffic — NOT to requests routed
-# through the API Gateway. Testing confirmed: upstream receives the original path unchanged.
-# See router.consul.hcl for available workaround options.
+# Rewrite responsibility by layer:
+#   Traefik (port 8081):    regex + capture groups  → /download/abc123 → /business-service/download.xhtml?token=abc123
+#   API Gateway (here):     full-path replacement   → /api → /business-service/api
+#   service-router:         prefix + suffix kept    → east-west only (not applied by API Gateway)
 #
 # Apply: consul config write routes/business-service.consul.hcl
 # Delete: consul config delete -kind http-route -name business-service

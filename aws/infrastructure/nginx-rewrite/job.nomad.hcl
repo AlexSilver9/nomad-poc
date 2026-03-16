@@ -42,11 +42,9 @@ http {
         listen 8081;
         server_name business-service.example.com;
 
-        # Route: /download/* with regex rewrite
-        # Transforms: /download/<token> → /business-service/download.xhtml?token=<token>
-        # e.g: /download/mytoken123 -> /business-service/download.xhtml?token=mytoken123
+        # Route: /download/<token> → /business-service/download.xhtml?token=<token>
+        # Converts the token path segment to a query parameter.
         location ~ ^/download/(.*)$ {
-            # Rewrite and proxy (internal redirect, no 302)
             rewrite ^/download/(.*)$ /business-service/download.xhtml?token=$1 break;
             proxy_pass         http://envoy_http;
             proxy_http_version 1.1;

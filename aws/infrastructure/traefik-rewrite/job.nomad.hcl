@@ -5,7 +5,7 @@ job "traefik-rewrite" {
 
   group "traefik" {
     network {
-      mode = "host"  # Required to bind to host port 8081 and reach Envoy at 127.0.0.1:8080
+      mode = "host"  # Required to bind to host port 8081 and reach API Gateway at 127.0.0.1:8080
     }
 
     task "traefik" {
@@ -18,7 +18,7 @@ job "traefik-rewrite" {
         args = [
           "--entrypoints.web.address=:8081",
           "--providers.file.filename=/etc/traefik/dynamic.yaml",
-          "--log.level=DEBUG",  # Helpful for debugging
+          "--log.level=INFO",
         ]
 
         volumes = [
@@ -26,48 +26,59 @@ job "traefik-rewrite" {
         ]
       }
 
+      # Traefik sits between the ALB and the Consul API Gateway.
+      #
+      # Flow:  ALB :8081 → Traefik :8081 → API Gateway :8080 → service sidecar → service
+      #
+      # Responsibility: regex URL rewrite with capture group (suffix-preserving).
+      # The API Gateway's URLRewrite.Path only supports full-path replacement and cannot
+      # preserve dynamic URL suffixes (e.g. tokens). Traefik handles this before the
+      # request reaches the API Gateway.
+      #
+      # Example:
+      #   Client sends:   GET /legacy-download/abc123  Host: business-service.example.com
+      #   Traefik rewrites to: GET /business-service/download.xhtml/abc123
+      #   API Gateway receives the rewritten path and routes to business-service.
+      #
+      # The Host header is forwarded unchanged (passHostHeader = true) so the API Gateway
+      # can still perform hostname-based routing.
       template {
         data = <<EOF
 http:
   routers:
-    # Route: /download/* with regex rewrite (business-service host)
+    # /download/<token> → /business-service/download.xhtml?token=<token>
+    # Regex rewrite: captures the token and converts it to a query parameter.
+    # Priority 10 — evaluated before the catch-all passthrough below.
     download-rewrite:
-      rule: "Host(`business-service`) && PathPrefix(`/download`)"
+      rule: "PathPrefix(`/download`)"
       entryPoints:
         - web
       middlewares:
-        - download-to-query
-      service: envoy-ingress
+        - download-rewrite
+      service: api-gateway
       priority: 10
 
-    # Route: business-service host passthrough
-    business-passthrough:
-      rule: "Host(`business-service`)"
-      entryPoints:
-        - web
-      service: envoy-ingress
-      priority: 5
-
-    # Default: catch-all for any other traffic (e.g., Host: localhost)
-    default-passthrough:
+    # All other traffic: forward to the API Gateway unchanged.
+    # The Host header is preserved so hostname-based routing works at the gateway.
+    passthrough:
       rule: "PathPrefix(`/`)"
       entryPoints:
         - web
-      service: envoy-ingress
+      service: api-gateway
       priority: 1
 
   middlewares:
-    download-to-query:
-      # Use redirectRegex to properly handle query string since replacePathRegex URL-encodes the '?' query delimiter
-      # Note: redirectRegex matches the FULL URL (scheme://host/path), not just the path
-      redirectRegex:
-        regex: "^https?://[^/]+/download/(.*)$"
+    download-rewrite:
+      replacePathRegex:
+        # Captures the token and rewrites to a query parameter.
+        # Note: replacePathRegex does not URL-encode '?' — safe for path-to-query rewrite.
+        regex: "^/download/(.*)"
         replacement: "/business-service/download.xhtml?token=$${1}"
-        permanent: false
 
   services:
-    envoy-ingress:
+    api-gateway:
       loadBalancer:
+        passHostHeader: true  # Preserve Host header for API Gateway hostname routing
         servers:
           - url: "http://127.0.0.1:8080"
 EOF

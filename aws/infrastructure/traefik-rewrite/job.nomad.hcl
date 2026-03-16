@@ -30,10 +30,9 @@ job "traefik-rewrite" {
       #
       # Flow:  ALB :8081 → Traefik :8081 → API Gateway :8080 → service sidecar → service
       #
-      # Responsibility: regex URL rewrite with capture group (suffix-preserving).
-      # The API Gateway's URLRewrite.Path only supports full-path replacement and cannot
-      # preserve dynamic URL suffixes (e.g. tokens). Traefik handles this before the
-      # request reaches the API Gateway.
+      # Responsibility: regex URL rewrite with capture group.
+      # The API Gateway's URLRewrite.Path only supports full-path replacement.
+      # Traefik handles this before the request reaches the API Gateway.
       #
       # Example:
       #   Client sends:   GET /legacy-download/abc123  Host: business-service.example.com

@@ -26,8 +26,9 @@ NODE_IP="${1:-}"
 if [[ -z "$NODE_IP" ]]; then
     read -rp "Node IP (public or private): " NODE_IP
 fi
-API_GW="http://${NODE_IP}:8080"   # Direct API Gateway (no rewrite)
-TRAEFIK="http://${NODE_IP}:8081"  # Traefik → API Gateway (regex rewrite)
+API_GW="http://${NODE_IP}:8080"    # Direct API Gateway (no rewrite)
+TRAEFIK="http://${NODE_IP}:8081"   # Traefik HTTP → API Gateway :8080 (regex rewrite)
+TRAEFIK_TLS="https://${NODE_IP}:8443"  # Traefik HTTPS → API Gateway :8082 (TLS term + rewrite)
 
 # --- Helpers ---
 
@@ -131,6 +132,42 @@ tr_pt_status=$(curl -s -o /dev/null -w "%{http_code}" \
     --connect-timeout 5 --max-time 10 \
     "${TRAEFIK}/" 2>/dev/null || echo "000")
 check_status "traefik passthrough: web-service / → 200" "200" "$tr_pt_status"
+
+section "Traefik HTTPS (port 8443 → API Gateway :8082 → https-service)"
+
+# Traefik terminates client TLS on :8443, re-encrypts, and forwards to API Gateway TCP :8082.
+# The API Gateway passes the bytes through to https-service which terminates the inner TLS.
+# -k = skip self-signed cert verification on the Traefik side.
+
+tls_status=$(curl -sk -o /dev/null -w "%{http_code}" \
+    -H "Host: https-service.example.com" \
+    --connect-timeout 5 --max-time 10 \
+    "${TRAEFIK_TLS}/" 2>/dev/null || echo "000")
+check_status "https-service via Traefik :8443 → 200" "200" "$tls_status"
+
+tls_body=$(curl -sk \
+    -H "Host: https-service.example.com" \
+    --connect-timeout 5 --max-time 10 \
+    "${TRAEFIK_TLS}/" 2>/dev/null || true)
+check_body_contains "https-service response body confirms TLS end-to-end" \
+    "Hello from https-service" "$tls_body"
+
+# HTTPS regex rewrite: /download/<token> via Traefik :8443 — same rewrite as HTTP path.
+# business-service (whoami) reflects the request line, confirming the rewrite was applied.
+tls_rw_body=$(curl -sk \
+    -H "Host: business-service.example.com" \
+    --connect-timeout 5 --max-time 10 \
+    "${TRAEFIK_TLS}/download/abc123" 2>/dev/null || true)
+check_body_contains \
+    "traefik HTTPS regex rewrite → upstream sees /business-service/download.xhtml?token=abc123" \
+    "/business-service/download.xhtml?token=abc123" "$tls_rw_body"
+
+# Verify non-HTTPS services still route through Traefik :8443 to API Gateway :8080 (HTTP path).
+tls_pt_status=$(curl -sk -o /dev/null -w "%{http_code}" \
+    -H "Host: web-service.example.com" \
+    --connect-timeout 5 --max-time 10 \
+    "${TRAEFIK_TLS}/" 2>/dev/null || echo "000")
+check_status "web-service via Traefik :8443 (TLS term → HTTP upstream) → 200" "200" "$tls_pt_status"
 
 section "HTTPS/TCP passthrough (port 8082)"
 

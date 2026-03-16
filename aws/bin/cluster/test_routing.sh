@@ -26,7 +26,8 @@ NODE_IP="${1:-}"
 if [[ -z "$NODE_IP" ]]; then
     read -rp "Node IP (public or private): " NODE_IP
 fi
-GW="http://${NODE_IP}:8080"
+API_GW="http://${NODE_IP}:8080"   # Direct API Gateway (no rewrite)
+TRAEFIK="http://${NODE_IP}:8081"  # Traefik → API Gateway (regex rewrite)
 
 # --- Helpers ---
 
@@ -36,7 +37,7 @@ http_status() {
     curl -s -o /dev/null -w "%{http_code}" \
         -H "Host: $host" "$@" \
         --connect-timeout 5 --max-time 10 \
-        "${GW}${path}" 2>/dev/null || echo "000"
+        "${API_GW}${path}" 2>/dev/null || echo "000"
 }
 
 # http_body HOST PATH [EXTRA_CURL_ARGS...]
@@ -45,7 +46,7 @@ http_body() {
     curl -s \
         -H "Host: $host" "$@" \
         --connect-timeout 5 --max-time 10 \
-        "${GW}${path}" 2>/dev/null || true
+        "${API_GW}${path}" 2>/dev/null || true
 }
 
 check_status() {
@@ -91,19 +92,45 @@ body=$(http_body "business-service.example.com" "/api")
 check_body_contains "business-service /api URLRewrite → upstream sees /business-service/api" \
     "GET /business-service/api HTTP" "$body"
 
-# /legacy-download: api-gateway routes to business-service (whoami); service-router PrefixRewrite
-# does NOT propagate through the api-gateway (architectural limitation — see router.consul.hcl).
-# The test documents current behaviour: upstream receives the original path unchanged.
+# /legacy-download via API Gateway directly: service-router PrefixRewrite does NOT propagate
+# through the API Gateway (architectural limitation). Upstream receives original path unchanged.
 body=$(http_body "business-service.example.com" "/legacy-download/abc123")
 status=$(http_status "business-service.example.com" "/legacy-download/abc123")
 check_status "business-service /legacy-download/abc123 → 200 (reaches service)" "200" "$status"
-if echo "$body" | grep -q "GET /business-service/download.xhtml/abc123 HTTP"; then
-    pass "/legacy-download prefix rewrite applied (service-router active through gateway)"
-elif echo "$body" | grep -q "GET /legacy-download/abc123 HTTP"; then
-    echo -e "  ${YELLOW}KNOWN${NC} /legacy-download prefix NOT rewritten (api-gateway limitation — see router.consul.hcl)"
+if echo "$body" | grep -q "GET /legacy-download/abc123 HTTP"; then
+    echo -e "  ${YELLOW}KNOWN${NC} /legacy-download NOT rewritten via API Gateway (expected — see router.consul.hcl)"
+elif echo "$body" | grep -q "GET /business-service/download.xhtml/abc123 HTTP"; then
+    pass "/legacy-download rewritten (unexpected via direct API Gateway — check traefik bypass)"
 else
     fail "/legacy-download path unexpected (body: $(echo "$body" | head -5))"
 fi
+
+section "Traefik regex URL rewrite (port 8081 → API Gateway)"
+
+# /download/<token> via Traefik: external client path used since the ingress-gateway era.
+# Traefik rewrites /download/<token> → /business-service/download.xhtml?token=<token>
+# before forwarding to the API Gateway, which routes to business-service by hostname.
+# This is a separate path from /legacy-download/ (east-west, service-router — see below).
+tr_status=$(curl -s -o /dev/null -w "%{http_code}" \
+    -H "Host: business-service.example.com" \
+    --connect-timeout 5 --max-time 10 \
+    "${TRAEFIK}/download/abc123" 2>/dev/null || echo "000")
+check_status "traefik /download/abc123 → 200" "200" "$tr_status"
+
+tr_body=$(curl -s \
+    -H "Host: business-service.example.com" \
+    --connect-timeout 5 --max-time 10 \
+    "${TRAEFIK}/download/abc123" 2>/dev/null || true)
+check_body_contains \
+    "traefik regex rewrite → upstream sees /business-service/download.xhtml?token=abc123" \
+    "/business-service/download.xhtml?token=abc123" "$tr_body"
+
+# Verify passthrough: non-rewrite paths still reach the correct service through traefik.
+tr_pt_status=$(curl -s -o /dev/null -w "%{http_code}" \
+    -H "Host: web-service.example.com" \
+    --connect-timeout 5 --max-time 10 \
+    "${TRAEFIK}/" 2>/dev/null || echo "000")
+check_status "traefik passthrough: web-service / → 200" "200" "$tr_pt_status"
 
 section "HTTPS/TCP passthrough (port 8082)"
 

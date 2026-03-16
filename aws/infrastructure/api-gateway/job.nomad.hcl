@@ -70,7 +70,7 @@ job "api-gateway" {
         name = "consul_api_gateway"
         aud  = ["consul.io"]
         ttl  = "1h"
-        file = true  # Write JWT to ${NOMAD_SECRETS_DIR}/consul_api_gateway for consul login
+        env  = true  # Exposes JWT as NOMAD_TOKEN_consul_api_gateway env var
       }
 
       config {
@@ -79,7 +79,7 @@ job "api-gateway" {
         args = [
           "-c",
           join(" && ", [
-            "consul login -method nomad-workloads -bearer-token-file ${NOMAD_SECRETS_DIR}/consul_api_gateway -token-sink-file ${NOMAD_ALLOC_DIR}/consul.token",
+            "echo \"$NOMAD_TOKEN_consul_api_gateway\" > ${NOMAD_SECRETS_DIR}/nwi.jwt && consul login -method nomad-workloads -bearer-token-file ${NOMAD_SECRETS_DIR}/nwi.jwt -token-sink-file ${NOMAD_ALLOC_DIR}/consul.token || true",
             "export CONSUL_HTTP_TOKEN=$(cat ${NOMAD_ALLOC_DIR}/consul.token || echo '')",
             "consul connect envoy -gateway api -register -deregister-after-critical 10s -service ${NOMAD_JOB_NAME} -admin-bind 0.0.0.0:19000 -ignore-envoy-compatibility -bootstrap > ${NOMAD_ALLOC_DIR}/envoy_bootstrap.json"
           ])

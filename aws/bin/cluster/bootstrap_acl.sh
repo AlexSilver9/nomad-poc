@@ -233,11 +233,14 @@ if [[ -z "$CONSUL_NOMAD_TOKEN" ]]; then
 else
 
 for node in "${NODES[@]}"; do
-  echo "  $node — writing /etc/nomad.d/consul-token.hcl"
-  ssh_exec "$node" "sudo tee /etc/nomad.d/consul-token.hcl > /dev/null" <<HCLEOF
-# Consul token for Nomad's Consul integration — written by bootstrap_acl.sh
+  echo "  $node — writing /etc/nomad.d/consul.hcl (address + grpc_address + token)"
+  ssh_exec "$node" "sudo tee /etc/nomad.d/consul.hcl > /dev/null" <<HCLEOF
+# Nomad-Consul integration — written by bootstrap_acl.sh.
+# Single file avoids HCL merge issues across multiple consul{} blocks.
 consul {
-  token = "$CONSUL_NOMAD_TOKEN"
+  address      = "127.0.0.1:8500"
+  grpc_address = "127.0.0.1:8502"
+  token        = "$CONSUL_NOMAD_TOKEN"
 }
 HCLEOF
 done

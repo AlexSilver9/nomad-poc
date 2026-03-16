@@ -105,22 +105,13 @@ if systemctl list-unit-files consul.service &>/dev/null; then
   sudo sed -i 's/^#Wants=consul.service/Wants=consul.service/' ${NOMAD_SYSTEMD_CONFIG}
   sudo sed -i 's/^#After=consul.service/After=consul.service/' ${NOMAD_SYSTEMD_CONFIG}
 
-  # Write consul.hcl — single file for all Nomad-Consul settings.
-  # bootstrap_acl.sh will overwrite this file to add the ACL token.
-  # Keeping it in one file avoids HCL merge issues across multiple consul{} blocks.
+  # Write consul.hcl with basic Nomad-Consul connectivity. No ACL token or service_identity yet.
+  # bootstrap_acl.sh overwrites this file to add the Consul token + service_identity block
+  # (required for Connect proxy token derivation in Consul ACL deny mode).
   sudo tee /etc/nomad.d/consul.hcl > /dev/null <<'CONSULEOF'
 consul {
   address      = "127.0.0.1:8500"
   grpc_address = "127.0.0.1:8502"
-
-  # Enable workload identity for Connect sidecar proxies (Nomad 1.7+).
-  # Without this block, Nomad does not create SI tokens for Connect proxies
-  # and consul connect envoy -bootstrap is called without a token, which fails
-  # in Consul ACL deny mode.
-  service_identity {
-    aud = ["consul.io"]
-    ttl = "1h"
-  }
 }
 CONSULEOF
 

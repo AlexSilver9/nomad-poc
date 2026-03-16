@@ -354,19 +354,32 @@ run_nomad_jobs() {
 
     local first_node="${NODES[0]}"
 
-    # Nomad job files (order matters: traefik first, then api-gateway, then services)
+    # Nomad job files to run (order matters: traefik first, then api-gateway, then services)
     local nomad_jobs=(
         "infrastructure/traefik-rewrite/job.nomad.hcl"
         "infrastructure/api-gateway/job.nomad.hcl"
         "services/web-service/job.nomad.hcl"
         "services/business-service/job.nomad.hcl"
+        "services/https-service/job.nomad.hcl"
     )
 
-    # Download Nomad job files from GitHub
+    # Additional files to download but not run automatically. nginx is an optional alternative to traefik — switch with:
+    #   nomad job stop traefik-rewrite
+    #   nomad job run infrastructure/nginx-rewrite/with-https-termination.nomad.hcl
+    local nomad_extra=(
+        "infrastructure/nginx-rewrite/job.nomad.hcl"
+        "infrastructure/nginx-rewrite/with-https-termination.nomad.hcl"
+    )
+
+    # Download all job files from GitHub
     log_info "Downloading Nomad job files to $first_node..."
-    for file in "${nomad_jobs[@]}"; do
+    for file in "${nomad_jobs[@]}" "${nomad_extra[@]}"; do
         local dir=$(dirname "$file")
-        ssh_run "$first_node" "mkdir -p $dir && wget -q -O $file $GITHUB_RAW_BASE/$file"
+        if ! ssh_run "$first_node" "mkdir -p $dir && wget -q -O $file $GITHUB_RAW_BASE/$file"; then
+            log_error "Failed to download $file from $GITHUB_RAW_BASE/$file"
+            log_error "Ensure the file is committed and pushed to the api-gateway branch on GitHub."
+            exit 1
+        fi
     done
 
     # Run jobs in order

@@ -67,10 +67,11 @@ job "api-gateway" {
       # The command below explicitly exchanges it for a Consul token via consul login.
       # Falls back gracefully (|| true) when ACL is not yet bootstrapped.
       identity {
-        name = "consul_api_gateway"
-        aud  = ["consul.io"]
-        ttl  = "1h"
-        env  = true  # Exposes JWT as NOMAD_TOKEN_consul_api_gateway env var
+        name        = "consul_api_gateway"
+        aud         = ["consul.io"]
+        ttl         = "1h"
+        env         = true         # Exposes JWT as NOMAD_TOKEN_consul_api_gateway env var
+        change_mode = "restart"    # Prestart task exits immediately; restart on rotation is a no-op
       }
 
       config {

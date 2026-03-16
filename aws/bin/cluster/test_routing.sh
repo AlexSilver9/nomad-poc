@@ -147,17 +147,18 @@ tr_pt_status=$(curl -s -o /dev/null -w "%{http_code}" \
     "${TRAEFIK}/" 2>/dev/null || echo "000")
 check_status "traefik passthrough: web-service / → 200" "200" "$tr_pt_status"
 
-section "Traefik HTTPS (port 8443 → API Gateway :8082 → https-service)"
+section "HTTPS (port 8443 → API Gateway → https-service)"
 
-# Traefik terminates client TLS on :8443, re-encrypts, and forwards to API Gateway TCP :8082.
-# The API Gateway passes the bytes through to https-service which terminates the inner TLS.
-# -k = skip self-signed cert verification on the Traefik side.
+# Both nginx and Traefik terminate TLS on :8443 and route by hostname:
+#   nginx:   TLS termination → hostname routing → rewrite → API Gateway :8080 or :8082
+#   Traefik: TLS termination → hostname routing → rewrite → API Gateway :8080 or :8082
+# -k = skip self-signed cert verification.
 
 tls_status=$(curl -sk -o /dev/null -w "%{http_code}" \
     -H "Host: https-service.example.com" \
     --connect-timeout 5 --max-time 10 \
     "${TRAEFIK_TLS}/" 2>/dev/null || echo "000")
-check_status "https-service via Traefik :8443 → 200" "200" "$tls_status"
+check_status "https-service via rewriter :8443 → 200" "200" "$tls_status"
 
 tls_body=$(curl -sk \
     -H "Host: https-service.example.com" \
@@ -166,7 +167,8 @@ tls_body=$(curl -sk \
 check_body_contains "https-service response body confirms TLS end-to-end" \
     "Hello from https-service" "$tls_body"
 
-# HTTPS regex rewrite: same rewrite applies on the HTTPS path.
+# HTTPS regex rewrite: both nginx and Traefik terminate TLS so both can rewrite paths.
+# nginx produces ?token=abc123 (query param); Traefik v3 produces /abc123 (path-based).
 tls_rw_body=$(curl -sk \
     -H "Host: business-service.example.com" \
     --connect-timeout 5 --max-time 10 \
@@ -181,12 +183,12 @@ else
     [[ -n "$req_line" ]] && echo "    Upstream saw: $req_line"
 fi
 
-# Verify non-HTTPS services still route through Traefik :8443 to API Gateway :8080 (HTTP path).
+# HTTPS passthrough for plain HTTP services: terminate TLS on :8443, forward HTTP to API GW :8080.
 tls_pt_status=$(curl -sk -o /dev/null -w "%{http_code}" \
     -H "Host: web-service.example.com" \
     --connect-timeout 5 --max-time 10 \
     "${TRAEFIK_TLS}/" 2>/dev/null || echo "000")
-check_status "web-service via Traefik :8443 (TLS term → HTTP upstream) → 200" "200" "$tls_pt_status"
+check_status "web-service via rewriter :8443 (TLS term → HTTP upstream) → 200" "200" "$tls_pt_status"
 
 section "HTTPS/TCP passthrough (port 8082)"
 

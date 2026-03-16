@@ -65,7 +65,14 @@ check_body_contains() {
         pass "$desc"
     else
         fail "$desc (pattern '$pattern' not found in response)"
-        echo "    Response: $(echo "$body" | head -5)"
+        # Show the request line (GET /path HTTP/1.1) to diagnose rewrite issues
+        local req_line
+        req_line=$(echo "$body" | grep -E "^(GET|POST|PUT|DELETE|PATCH) " | head -1)
+        if [[ -n "$req_line" ]]; then
+            echo "    Upstream saw: $req_line"
+        else
+            echo "    Response: $(echo "$body" | head -5)"
+        fi
     fi
 }
 

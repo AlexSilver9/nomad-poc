@@ -52,9 +52,27 @@
 - 3-Node Cluster bilden
 - Update SETUP.md + SERVICES.md
 
+- Zugriff Container Definitionen
+
 # TODO:
 sudo git pull origin master --rebase
-- Zugriff Container Definitionen
+- CPU & Memory Settings / Limits erarbeiten
+- CNI PATH:
+# Write a drop-in config (no need to touch the main nomad.hcl)
+sudo tee /etc/nomad.d/cni.hcl > /dev/null <<'EOF'
+client {
+  cni_path = "/opt/cni/bin"
+}
+EOF
+sudo systemctl restart nomad
+
+# In client config — reserve resources for OS/system, not available to jobs
+reserved {
+  cpu            = 500   # MHz kept off the table
+  memory         = 1024  # MB
+  disk           = 1024  # MB
+}
+
 - ACLs aktiv setzen
 - SSL -> ALB -> Nginx SSL -> Payara SSL
     - Wie kommt man an den Hostname im Request

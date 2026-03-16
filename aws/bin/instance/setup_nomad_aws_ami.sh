@@ -112,6 +112,15 @@ if systemctl list-unit-files consul.service &>/dev/null; then
 consul {
   address      = "127.0.0.1:8500"
   grpc_address = "127.0.0.1:8502"
+
+  # Enable workload identity for Connect sidecar proxies (Nomad 1.7+).
+  # Without this block, Nomad does not create SI tokens for Connect proxies
+  # and consul connect envoy -bootstrap is called without a token, which fails
+  # in Consul ACL deny mode.
+  service_identity {
+    aud = ["consul.io"]
+    ttl = "1h"
+  }
 }
 CONSULEOF
 

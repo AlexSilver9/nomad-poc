@@ -241,6 +241,15 @@ consul {
   address      = "127.0.0.1:8500"
   grpc_address = "127.0.0.1:8502"
   token        = "$CONSUL_NOMAD_TOKEN"
+
+  # Enable workload identity for Connect sidecar proxies (Nomad 1.7+).
+  # Without this block, Nomad does not create SI tokens for Connect proxies
+  # and consul connect envoy -bootstrap is called without a token, which fails
+  # in Consul ACL deny mode.
+  service_identity {
+    aud = ["consul.io"]
+    ttl = "1h"
+  }
 }
 HCLEOF
 done
@@ -325,9 +334,26 @@ CONSUL_HTTP_TOKEN=$CONSUL_MGMT_TOKEN consul acl binding-rule create \\
   -selector '"nomad_service" not in value and value.nomad_job_id=="api-gateway"'
 SCRIPTEOF
 
+    # Add a binding rule that grants the nomad-default-tasks role to Connect proxy JWTs.
+    # The default service binding rule (BindType: service, from nomad setup consul) creates
+    # a service identity token that lacks agent:read, which consul connect envoy -bootstrap
+    # requires to call GET /v1/agent/self. This rule adds the nomad-default-tasks role
+    # (which includes agent:read) to all Connect proxy tokens. Consul merges permissions
+    # from all matching binding rules.
+    echo "  Creating Connect proxy agent:read binding rule..."
+    ssh_exec "$BOOTSTRAP_NODE" bash << SCRIPTEOF
+CONSUL_HTTP_TOKEN=$CONSUL_MGMT_TOKEN consul acl binding-rule create \\
+  -method nomad-workloads \\
+  -bind-type role \\
+  -bind-name 'nomad-\${value.nomad_namespace}-tasks' \\
+  -selector '"nomad_service" in value' \\
+  -description 'Grant agent:read (nomad-default-tasks role) to Connect proxy workloads'
+SCRIPTEOF
+
     echo "  NWI configured."
     echo "  — auth method: nomad-workloads"
     echo "  — api-gateway binding rule: builtin/api-gateway (Name=api-gateway)"
+    echo "  — connect proxy binding rule: nomad-default-tasks role (agent:read)"
   fi
 
 fi

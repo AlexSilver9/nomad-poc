@@ -144,8 +144,12 @@ http:
     download-rewrite:
       replacePathRegex:
         # Captures the token and rewrites to a query parameter.
+        # Traefik v3 limitation: replacePathRegex URL-encodes '?' in the replacement, so
+        # query-param injection (?token=...) is not possible. Use path-based format instead.
+        # nginx correctly produces ?token=abc123; Traefik produces /abc123 path-based.
+        # Note: use bare $1 (not $$1) — in an HCL heredoc, $1 is literal (not interpolation).
         regex: "^/download/(.*)"
-        replacement: "/business-service/download.xhtml?token=$$1"
+        replacement: "/business-service/download.xhtml/$1"
 
   services:
     # Plain HTTP to API Gateway HTTP listener

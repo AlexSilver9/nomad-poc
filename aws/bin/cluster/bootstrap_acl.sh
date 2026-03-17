@@ -150,7 +150,7 @@ for node in "${NODES[@]}"; do
   echo "    Restarting $node..."
   ssh_exec "$node" "sudo systemctl restart consul"
   for i in {1..12}; do
-    alive=$(ssh_exec "$BOOTSTRAP_NODE" "consul members 2>/dev/null | { grep -c alive || true; }" || echo 0)
+    alive=$(ssh_exec "$BOOTSTRAP_NODE" "consul members | { grep -c alive || true; }" || echo 0)
     if [[ "$alive" -ge "${#NODES[@]}" ]]; then
       echo "    Rejoined ($alive/${#NODES[@]} alive)."
       break
@@ -267,7 +267,7 @@ echo "  Waiting for Nomad to be active on all nodes..."
 for i in {1..12}; do
   alive=0
   for node in "${NODES[@]}"; do
-    ssh_exec "$node" "systemctl is-active --quiet nomad" 2>/dev/null && ((alive++)) || true
+    ssh_exec "$node" "systemctl is-active --quiet nomad" && ((alive++)) || true
   done
   if [[ "$alive" -ge "${#NODES[@]}" ]]; then
     echo "  All $alive nodes active."

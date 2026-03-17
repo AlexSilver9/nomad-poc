@@ -48,7 +48,7 @@ else
     TARGET_GROUP_NAME="$1"
     echo "Looking up target group: ${TARGET_GROUP_NAME}"
 
-    result=$(aws elbv2 describe-target-groups --names "${TARGET_GROUP_NAME}" 2>/dev/null || true)
+    result=$(aws elbv2 describe-target-groups --names "${TARGET_GROUP_NAME}" || true)
 
     if [[ -z "$result" ]] || [[ "$(echo "$result" | jq '.TargetGroups | length')" == "0" ]]; then
         echo "Error: Target group '${TARGET_GROUP_NAME}' not found"

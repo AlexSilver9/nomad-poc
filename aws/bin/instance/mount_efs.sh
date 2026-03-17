@@ -17,13 +17,13 @@ FS_ID="$1"
 MOUNT_POINT="/mnt/efs"
 
 # Install EFS utils if not present
-if ! command -v mount.efs &>/dev/null; then
+if ! command -v mount.efs > /dev/null; then
     echo "Installing amazon-efs-utils..."
     sudo yum install -y amazon-efs-utils > /dev/null
 fi
 
 # Check if already mounted
-if mountpoint -q "$MOUNT_POINT" 2>/dev/null; then
+if mountpoint -q "$MOUNT_POINT"; then
     echo "EFS already mounted at $MOUNT_POINT"
     exit 0
 fi
@@ -34,7 +34,7 @@ echo "Mounting $FS_ID at $MOUNT_POINT..."
 MAX_ATTEMPTS=24
 ATTEMPT=1
 while [[ $ATTEMPT -le $MAX_ATTEMPTS ]]; do
-    if sudo mount -t efs "$FS_ID":/ "$MOUNT_POINT" 2>/dev/null; then
+    if sudo mount -t efs "$FS_ID":/ "$MOUNT_POINT"; then
         break
     fi
     echo "  Mount attempt $ATTEMPT/$MAX_ATTEMPTS failed (DNS may not be ready), retrying in 5s..."

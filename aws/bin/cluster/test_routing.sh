@@ -38,7 +38,7 @@ http_status() {
     curl -s -o /dev/null -w "%{http_code}" \
         -H "Host: $host" "$@" \
         --connect-timeout 5 --max-time 10 \
-        "${API_GW}${path}" 2>/dev/null || echo "000"
+        "${API_GW}${path}" || echo "000"
 }
 
 # http_body HOST PATH [EXTRA_CURL_ARGS...]
@@ -47,7 +47,7 @@ http_body() {
     curl -s \
         -H "Host: $host" "$@" \
         --connect-timeout 5 --max-time 10 \
-        "${API_GW}${path}" 2>/dev/null || true
+        "${API_GW}${path}" || true
 }
 
 check_status() {
@@ -122,13 +122,13 @@ section "Traefik regex URL rewrite (port 8081 → API Gateway)"
 tr_status=$(curl -s -o /dev/null -w "%{http_code}" \
     -H "Host: business-service.example.com" \
     --connect-timeout 5 --max-time 10 \
-    "${TRAEFIK}/download/abc123" 2>/dev/null || echo "000")
+    "${TRAEFIK}/download/abc123" || echo "000")
 check_status "rewriter /download/abc123 → 200" "200" "$tr_status"
 
 tr_body=$(curl -s \
     -H "Host: business-service.example.com" \
     --connect-timeout 5 --max-time 10 \
-    "${TRAEFIK}/download/abc123" 2>/dev/null || true)
+    "${TRAEFIK}/download/abc123" || true)
 # Accept nginx format (?token=abc123) or Traefik v3 format (/abc123 path-based)
 if echo "$tr_body" | grep -q "/business-service/download.xhtml?token=abc123"; then
     pass "rewriter regex rewrite → upstream sees /business-service/download.xhtml?token=abc123 (nginx)"
@@ -144,7 +144,7 @@ fi
 tr_pt_status=$(curl -s -o /dev/null -w "%{http_code}" \
     -H "Host: web-service.example.com" \
     --connect-timeout 5 --max-time 10 \
-    "${TRAEFIK}/" 2>/dev/null || echo "000")
+    "${TRAEFIK}/" || echo "000")
 check_status "traefik passthrough: web-service / → 200" "200" "$tr_pt_status"
 
 section "HTTPS (port 8443 → API Gateway → https-service)"
@@ -157,13 +157,13 @@ section "HTTPS (port 8443 → API Gateway → https-service)"
 tls_status=$(curl -sk -o /dev/null -w "%{http_code}" \
     -H "Host: https-service.example.com" \
     --connect-timeout 5 --max-time 10 \
-    "${TRAEFIK_TLS}/" 2>/dev/null || echo "000")
+    "${TRAEFIK_TLS}/" || echo "000")
 check_status "https-service via rewriter :8443 → 200" "200" "$tls_status"
 
 tls_body=$(curl -sk \
     -H "Host: https-service.example.com" \
     --connect-timeout 5 --max-time 10 \
-    "${TRAEFIK_TLS}/" 2>/dev/null || true)
+    "${TRAEFIK_TLS}/" || true)
 check_body_contains "https-service response body confirms TLS end-to-end" \
     "Hello from https-service" "$tls_body"
 
@@ -172,7 +172,7 @@ check_body_contains "https-service response body confirms TLS end-to-end" \
 tls_rw_body=$(curl -sk \
     -H "Host: business-service.example.com" \
     --connect-timeout 5 --max-time 10 \
-    "${TRAEFIK_TLS}/download/abc123" 2>/dev/null || true)
+    "${TRAEFIK_TLS}/download/abc123" || true)
 if echo "$tls_rw_body" | grep -q "/business-service/download.xhtml?token=abc123"; then
     pass "rewriter HTTPS regex rewrite → upstream sees /business-service/download.xhtml?token=abc123 (nginx)"
 elif echo "$tls_rw_body" | grep -q "/business-service/download.xhtml/abc123"; then
@@ -187,7 +187,7 @@ fi
 tls_pt_status=$(curl -sk -o /dev/null -w "%{http_code}" \
     -H "Host: web-service.example.com" \
     --connect-timeout 5 --max-time 10 \
-    "${TRAEFIK_TLS}/" 2>/dev/null || echo "000")
+    "${TRAEFIK_TLS}/" || echo "000")
 check_status "web-service via rewriter :8443 (TLS term → HTTP upstream) → 200" "200" "$tls_pt_status"
 
 section "HTTPS/TCP passthrough (port 8082)"

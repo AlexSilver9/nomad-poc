@@ -21,7 +21,7 @@ USERNAME="$1"
 echo "=== Revoking Nomad user tokens ==="
 echo ""
 
-accessors=$(nomad acl token list -json 2>/dev/null \
+accessors=$(nomad acl token list -json \
   | jq -r --arg n "$USERNAME" '.[] | select(.Name == $n) | .AccessorID')
 
 if [[ -z "$accessors" ]]; then

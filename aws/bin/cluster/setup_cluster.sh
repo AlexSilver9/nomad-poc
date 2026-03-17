@@ -212,7 +212,7 @@ install_consul() {
     local max_attempts=5  # 5 attempts * 2 seconds = 10 seconds
 
     while [[ $attempt -le $max_attempts ]]; do
-        members=$(ssh_run "$first_node" "consul members" 2>/dev/null || true)
+        members=$(ssh_run "$first_node" "consul members" || true)
         if echo "$members" | grep -q "alive"; then
             log_success "Consul cluster formed:"
             echo "$members"
@@ -267,7 +267,7 @@ install_nomad() {
     local max_attempts=5  # 5 attempts * 2 seconds = 10 seconds
 
     while [[ $attempt -le $max_attempts ]]; do
-        members=$(ssh_run "$first_node" "nomad server members" 2>/dev/null || true)
+        members=$(ssh_run "$first_node" "nomad server members" || true)
         if echo "$members" | grep -q "alive"; then
             log_success "Nomad cluster formed:"
             echo "$members"
@@ -333,15 +333,15 @@ configure_consul() {
     log_info "Verifying Consul configurations..."
     local verify_failed=0
     for svc in web-service business-service business-service-api https-service; do
-        if ! ssh_run "$first_node" "consul config read -kind service-defaults -name $svc" &>/dev/null; then
+        if ! ssh_run "$first_node" "consul config read -kind service-defaults -name $svc" > /dev/null; then
             log_error "service-defaults/$svc not found — defaults must be applied before routers"
             verify_failed=1
         fi
     done
-    ssh_run "$first_node" "consul config read -kind http-route -name web-service" &>/dev/null || { log_error "http-route/web-service not found"; verify_failed=1; }
-    ssh_run "$first_node" "consul config read -kind http-route -name business-service" &>/dev/null || { log_error "http-route/business-service not found"; verify_failed=1; }
-    ssh_run "$first_node" "consul config read -kind tcp-route -name https-service" &>/dev/null || { log_error "tcp-route/https-service not found"; verify_failed=1; }
-    ssh_run "$first_node" "consul config read -kind service-router -name business-service" &>/dev/null || { log_error "service-router/business-service not found"; verify_failed=1; }
+    ssh_run "$first_node" "consul config read -kind http-route -name web-service" > /dev/null || { log_error "http-route/web-service not found"; verify_failed=1; }
+    ssh_run "$first_node" "consul config read -kind http-route -name business-service" > /dev/null || { log_error "http-route/business-service not found"; verify_failed=1; }
+    ssh_run "$first_node" "consul config read -kind tcp-route -name https-service" > /dev/null || { log_error "tcp-route/https-service not found"; verify_failed=1; }
+    ssh_run "$first_node" "consul config read -kind service-router -name business-service" > /dev/null || { log_error "service-router/business-service not found"; verify_failed=1; }
     [[ $verify_failed -eq 0 ]] || { log_error "One or more Consul config entries are missing. Check the errors above."; exit 1; }
     log_success "Consul service configurations verified"
 }
@@ -397,7 +397,7 @@ run_nomad_jobs() {
     # Verify api-gateway job is running
     log_info "Verifying api-gateway job..."
     local gw_status
-    gw_status=$(ssh_run "$first_node" "nomad job status api-gateway 2>/dev/null | grep -c running" || echo "0")
+    gw_status=$(ssh_run "$first_node" "nomad job status api-gateway | grep -c running" || echo "0")
     if [[ "$gw_status" -eq 0 ]]; then
         log_warn "api-gateway allocations not yet running — check 'nomad job status api-gateway'"
     else
@@ -422,7 +422,7 @@ test_internal_routing() {
     # Host header must match the FQDN configured in the ingress gateway hosts field.
     log_info "Testing web-service (default route)..."
     local result
-    result=$(ssh_run "$first_node" "curl -s -H 'Host: web-service.example.com' http://localhost:8081/" 2>/dev/null || echo "FAILED")
+    result=$(ssh_run "$first_node" "curl -s -H 'Host: web-service.example.com' http://localhost:8081/" || echo "FAILED")
     if echo "$result" | grep -q "hello world"; then
         log_success "Web service: OK - $result"
     else
@@ -430,7 +430,7 @@ test_internal_routing() {
     fi
 
     log_info "Testing business-service (Host header)..."
-    result=$(ssh_run "$first_node" "curl -s -H 'Host: business-service.example.com' http://localhost:8081/ | grep -o 'Name: business-service' || echo 'NOT FOUND'" 2>/dev/null)
+    result=$(ssh_run "$first_node" "curl -s -H 'Host: business-service.example.com' http://localhost:8081/ | grep -o 'Name: business-service' || echo 'NOT FOUND'")
     if echo "$result" | grep -q "business-service"; then
         log_success "Business service: OK"
     else
@@ -438,7 +438,7 @@ test_internal_routing() {
     fi
 
     log_info "Testing legacy API route..."
-    result=$(ssh_run "$first_node" "curl -s -H 'Host: business-service.example.com' http://localhost:8081/legacy-business-service/test | grep -o 'Name: business-service-api' || echo 'NOT FOUND'" 2>/dev/null)
+    result=$(ssh_run "$first_node" "curl -s -H 'Host: business-service.example.com' http://localhost:8081/legacy-business-service/test | grep -o 'Name: business-service-api' || echo 'NOT FOUND'")
     if echo "$result" | grep -q "business-service-api"; then
         log_success "Legacy API route: OK"
     else
@@ -446,7 +446,7 @@ test_internal_routing() {
     fi
 
     log_info "Testing URL rewrite (download)..."
-    result=$(ssh_run "$first_node" "curl -L -s -H 'Host: business-service.example.com' http://localhost:8081/download/testtoken123 | grep -o 'token=testtoken123' || echo 'NOT FOUND'" 2>/dev/null)
+    result=$(ssh_run "$first_node" "curl -L -s -H 'Host: business-service.example.com' http://localhost:8081/download/testtoken123 | grep -o 'token=testtoken123' || echo 'NOT FOUND'")
     if echo "$result" | grep -q "token=testtoken123"; then
         log_success "URL rewrite: OK"
     else
@@ -462,7 +462,7 @@ create_load_balancer() {
 
     # Check if target group exists
     local existing_tg
-    existing_tg=$(aws elbv2 describe-target-groups --names "$TARGET_GROUP_NAME" 2>/dev/null | jq -r '.TargetGroups[0].TargetGroupArn' || echo "")
+    existing_tg=$(aws elbv2 describe-target-groups --names "$TARGET_GROUP_NAME" | jq -r '.TargetGroups[0].TargetGroupArn' || echo "")
 
     if [[ -n "$existing_tg" && "$existing_tg" != "null" ]]; then
         log_warn "Target group $TARGET_GROUP_NAME already exists"
@@ -475,7 +475,7 @@ create_load_balancer() {
 
     # Check if ALB exists
     local existing_alb
-    existing_alb=$(aws elbv2 describe-load-balancers --names "$ALB_NAME" 2>/dev/null | jq -r '.LoadBalancers[0].LoadBalancerArn' || echo "")
+    existing_alb=$(aws elbv2 describe-load-balancers --names "$ALB_NAME" | jq -r '.LoadBalancers[0].LoadBalancerArn' || echo "")
 
     if [[ -n "$existing_alb" && "$existing_alb" != "null" ]]; then
         log_warn "ALB $ALB_NAME already exists"
@@ -531,7 +531,7 @@ wait_and_test_alb() {
 
     log_info "Testing default route..."
     local result
-    result=$(curl -s -H "Host: web-service.example.com" "http://$ALB_DNS/" 2>/dev/null || echo "FAILED")
+    result=$(curl -s -H "Host: web-service.example.com" "http://$ALB_DNS/" || echo "FAILED")
     if echo "$result" | grep -q "hello world"; then
         log_success "ALB default route: OK"
     else

@@ -87,7 +87,7 @@ done
 # Wait for SSH
 echo "Waiting for SSH..."
 for dns in "${CLIENT_DNS[@]}"; do
-    while ! ssh $SSH_OPTS -i "$SSH_KEY" ec2-user@"$dns" "echo ok" &>/dev/null; do
+    while ! ssh $SSH_OPTS -i "$SSH_KEY" ec2-user@"$dns" "echo ok" > /dev/null; do
         echo -n "."
         sleep 5
     done
@@ -139,7 +139,7 @@ done
 # Register with target group
 echo "Registering instances with target group..."
 TARGET_GROUP_ARN=$(aws elbv2 describe-target-groups --names "$TARGET_GROUP_NAME" \
-    --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null || echo "")
+    --query 'TargetGroups[0].TargetGroupArn' --output text || echo "")
 
 if [[ -n "$TARGET_GROUP_ARN" && "$TARGET_GROUP_ARN" != "None" ]]; then
     targets=""
@@ -168,7 +168,7 @@ for i in "${!CLIENT_DNS[@]}"; do
     echo "  ssh -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -i $SSH_KEY ec2-user@${CLIENT_DNS[$i]}"
 done
 echo ""
-ALB_DNS=$(aws elbv2 describe-load-balancers --names nomad-alb --query 'LoadBalancers[0].DNSName' --output text 2>/dev/null || echo "")
+ALB_DNS=$(aws elbv2 describe-load-balancers --names nomad-alb --query 'LoadBalancers[0].DNSName' --output text || echo "")
 if [[ -n "$ALB_DNS" && "$ALB_DNS" != "None" ]]; then
     echo "ALB DNS: $ALB_DNS"
     echo ""

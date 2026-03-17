@@ -53,13 +53,13 @@ echo ""
 echo "=============================================="
 echo "Verify the allocation is on the sensitive node pool:"
 echo ""
-ALLOC_ID=$(nomad job allocs -t '{{range .}}{{.ID}}{{end}}' "$JOB_NAME" 2>/dev/null || echo "")
+ALLOC_ID=$(nomad job allocs -t '{{range .}}{{.ID}}{{end}}' "$JOB_NAME" || echo "")
 if [[ -n "$ALLOC_ID" ]]; then
-    NODE_ID=$(nomad alloc status -t '{{.NodeID}}' "$ALLOC_ID" 2>/dev/null || echo "")
+    NODE_ID=$(nomad alloc status -t '{{.NodeID}}' "$ALLOC_ID" || echo "")
     if [[ -n "$NODE_ID" ]]; then
         echo "  Alloc:     $ALLOC_ID"
         echo "  Node:      $NODE_ID"
-        echo "  Node Pool: $(nomad node status -t '{{.NodePool}}' "$NODE_ID" 2>/dev/null || echo "unknown")"
+        echo "  Node Pool: $(nomad node status -t '{{.NodePool}}' "$NODE_ID" || echo "unknown")"
     fi
 fi
 echo ""

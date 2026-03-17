@@ -63,7 +63,7 @@ else
     ALB_NAME="$1"
     echo "Looking up ALB: ${ALB_NAME}"
 
-    result=$(aws elbv2 describe-load-balancers --names "${ALB_NAME}" 2>/dev/null || true)
+    result=$(aws elbv2 describe-load-balancers --names "${ALB_NAME}" || true)
 
     if [[ -z "$result" ]] || [[ "$(echo "$result" | jq '.LoadBalancers | length')" == "0" ]]; then
         echo "Error: ALB '${ALB_NAME}' not found"

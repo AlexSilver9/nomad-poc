@@ -42,7 +42,7 @@ echo "--- Phase 1: Nomad roles ---"
 
 create_nomad_role() {
   local name="$1" policy="$2" description="$3"
-  if nomad acl role list -json 2>/dev/null | jq -e --arg n "$name" '.[] | select(.Name == $n)' > /dev/null 2>&1; then
+  if nomad acl role list -json | jq -e --arg n "$name" '.[] | select(.Name == $n)' > /dev/null; then
     echo "  nomad role '$name' already exists — skipping"
   else
     nomad acl role create -name="$name" -policy="$policy" -description="$description" > /dev/null
@@ -63,7 +63,7 @@ echo "--- Phase 2: Consul roles ---"
 
 create_consul_role() {
   local name="$1" policy="$2" description="$3"
-  if consul acl role list -format=json 2>/dev/null | jq -e --arg n "$name" '.[] | select(.Name == $n)' > /dev/null 2>&1; then
+  if consul acl role list -format=json | jq -e --arg n "$name" '.[] | select(.Name == $n)' > /dev/null; then
     echo "  consul role '$name' already exists — skipping"
   else
     consul acl role create -name="$name" -policy-name="$policy" -description="$description" > /dev/null
@@ -92,7 +92,7 @@ jq -c '.[]' "$USERS_JSON" | while IFS= read -r user; do
   echo "  user: $username"
 
   # --- Nomad token ---
-  existing_nomad_accessor=$(nomad acl token list -json 2>/dev/null \
+  existing_nomad_accessor=$(nomad acl token list -json \
     | jq -r --arg n "$username" '.[] | select(.Name == $n) | .AccessorID')
   if [[ -n "$existing_nomad_accessor" ]]; then
     echo "    nomad token for '$username' already exists — skipping"
@@ -109,7 +109,7 @@ jq -c '.[]' "$USERS_JSON" | while IFS= read -r user; do
   fi
 
   # --- Consul token ---
-  existing_consul=$(consul acl token list -format=json 2>/dev/null \
+  existing_consul=$(consul acl token list -format=json \
     | jq -r --arg d "$username" '.[] | select(.Description == $d) | .SecretID')
   if [[ -n "$existing_consul" ]]; then
     echo "    consul token for '$username' already exists — skipping"

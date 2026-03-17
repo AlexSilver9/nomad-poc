@@ -21,7 +21,7 @@ USERNAME="$1"
 echo "=== Revoking Consul user tokens ==="
 echo ""
 
-accessors=$(consul acl token list -format=json 2>/dev/null \
+accessors=$(consul acl token list -format=json \
   | jq -r --arg d "$USERNAME" '.[] | select(.Description == $d) | .AccessorID')
 
 if [[ -z "$accessors" ]]; then

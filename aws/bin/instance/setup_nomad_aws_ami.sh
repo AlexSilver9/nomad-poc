@@ -93,7 +93,7 @@ fi
 # Integrate Nomad with Consul if consul.service exists
 nomad_user=""
 nomad_group=""
-if systemctl list-unit-files consul.service &>/dev/null; then
+if systemctl list-unit-files consul.service > /dev/null; then
   echo "Consul detected, enabling Nomad-Consul integration"
 
   # To integrate Consul with Nomad via CNI bridge network

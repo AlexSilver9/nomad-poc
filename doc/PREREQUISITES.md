@@ -15,7 +15,7 @@ This document lists everything that must exist in AWS **before** running any set
 | Private key file | Operator | Expected at `~/workspace/nomad/nomad-keypair.pem` or `$SSH_KEY` |
 | EFS security group | AWS admin | EFS mount target must accept TCP 2049 (NFS) from EC2 nodes |
 | AWS credentials | Operator | `aws-cli` must be configured with permissions to create EC2, ELB, EFS resources |
-| DNS records | AWS admin / customer | Scripts use ALB DNS name directly; no Route53 setup is done |
+| DNS records | AWS admin | Scripts use ALB DNS name directly; no Route53 setup is done |
 | ACM certificate | AWS admin | Required for HTTPS on the ALB listener — not created by scripts |
 | Docker registry credentials | Operator | For private registries — not configured by scripts |
 

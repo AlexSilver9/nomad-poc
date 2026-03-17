@@ -5,60 +5,127 @@ This guide explains where to configure different aspects of the Nomad/Consul ser
 ## Configuration Files Overview
 
 | Configuration | File | When to Use |
-|--------------|------|-------------|
-| **Ingress Gateway routing** (hosts, services) | `aws/infrastructure/ingress-gateway/job.nomad.hcl` | Add/remove services exposed through the gateway |
-| **Service protocol** (http/tcp/grpc) | `aws/services/*/defaults.consul.hcl` | When adding a new service to the mesh |
-| **Service-to-service routing** (path-based) | `aws/services/*/router.consul.hcl` | Route different paths to different service subsets |
-| **Service authorization** (intentions) | `aws/services/*/intentions.consul.hcl` | Allow/deny which sources can send traffic to a service |
-| **URL rewrites** (regex transforms) | `aws/infrastructure/traefik-rewrite/job.nomad.hcl` | Complex URL transformations before hitting Envoy |
-| **Service deployment** (containers, resources) | `aws/services/*/job.nomad.hcl` | Deploy/update application containers |
+|---|---|---|
+| **API Gateway listeners** (ports, protocols) | `infrastructure/api-gateway/gateway.consul.hcl` | Add/remove listener ports (e.g. new TCP port for HTTPS-native service) |
+| **HTTP routing** (hostname → service) | `services/<svc>/route.consul.hcl` | Add/update HTTP route for a service |
+| **TCP routing** (port → service) | `services/<svc>/route.consul.hcl` | Add/update TCP route for an HTTPS-native service |
+| **Service protocol** (http/tcp) | `services/<svc>/defaults.consul.hcl` | Required when adding a new service to the mesh |
+| **Service authorization** (intentions) | `services/<svc>/intentions.consul.hcl` | Allow/deny which sources can send traffic to a service |
+| **East-west path routing** | `services/<svc>/router.consul.hcl` | Route different paths to different service subsets (service-to-service only) |
+| **URL rewrites** (regex with capture groups) | `infrastructure/nginx-rewrite/job.nomad.hcl` or `traefik-rewrite/job.nomad.hcl` | Complex URL transformations before hitting the API Gateway |
+| **Service deployment** (containers, resources) | `services/<svc>/job.nomad.hcl` | Deploy/update application containers |
 
 
 ## Detailed Configuration
 
-### Ingress Gateway (`ingress-gateway.hcl`)
+### API Gateway (`gateway.consul.hcl`)
 
-Defines which services are exposed through the gateway and how they're routed based on Host headers.
+Declares the listeners — which ports Envoy binds to and what protocol each uses. One HTTP listener handles all plain HTTP services (Host-header routing). One TCP listener per HTTPS-native service.
 
 ```hcl
-ingress {
-  listener {
-    port     = 8080
-    protocol = "http"
+Kind = "api-gateway"
+Name = "api-gateway"
 
-    # IMPORTANT: More specific hosts must come before wildcards
-    service {
-      name  = "business-service"
-      hosts = ["business-service"]
-    }
-
-    service {
-      name  = "web-service"
-      hosts = ["*"]
-    }
-  }
-}
+Listeners = [
+  { Name = "http",           Port = 8080, Protocol = "http" },
+  { Name = "https-service",  Port = 8082, Protocol = "tcp"  },
+]
 ```
 
-**Apply changes:** `nomad job run ingress-gateway.hcl`
+**Apply changes** (requires api-gateway job restart):
+```bash
+consul config write infrastructure/api-gateway/gateway.consul.hcl
+nomad job stop api-gateway && nomad job run infrastructure/api-gateway/job.nomad.hcl
+```
 
 
-### Service Defaults (`*-defaults.hcl`)
+### HTTP Routes (`services/<svc>/route.consul.hcl`)
 
-Defines the protocol for a service in the mesh. Required for Consul Connect to know how to proxy traffic.
+Routes HTTP traffic to a service based on Host header. Optionally rewrite the path.
+
+```hcl
+Kind      = "http-route"
+Name      = "web-service"
+Hostnames = ["web-service.example.com"]
+
+Rules = [{ Services = [{ Name = "web-service" }] }]
+
+Parents = [{ Kind = "api-gateway", Name = "api-gateway", SectionName = "http" }]
+```
+
+With a static path rewrite (full-path replacement — no regex, no suffix preservation):
+
+```hcl
+Rules = [{
+  Matches  = [{ Path = { Match = "Prefix", Value = "/api" } }]
+  Filters  = [{ Type = "URLRewrite", URLRewrite = { Path = { Type = "ReplaceFullPath", Value = "/business-service/api" } } }]
+  Services = [{ Name = "business-service" }]
+}]
+```
+
+**Apply changes** (no job restart needed — Envoy reloads automatically):
+```bash
+consul config write services/web-service/route.consul.hcl
+```
+
+
+### TCP Routes (`services/<svc>/route.consul.hcl`)
+
+Routes TCP traffic by port (no Host header visibility at TCP level). One TCP listener + one TCP route per HTTPS-native service.
+
+```hcl
+Kind = "tcp-route"
+Name = "https-service"
+
+Services = [{ Name = "https-service" }]
+
+Parents = [{ Kind = "api-gateway", Name = "api-gateway", SectionName = "https-service" }]
+```
+
+**Apply changes:**
+```bash
+consul config write services/https-service/route.consul.hcl
+```
+
+
+### Service Defaults (`defaults.consul.hcl`)
+
+Declares the protocol for a service in the mesh. Must be applied **before** any route referencing the service, otherwise Consul rejects the route with an inconsistent-protocol error.
 
 ```hcl
 Kind     = "service-defaults"
-Name     = "my-service"
-Protocol = "http"  # or "tcp", "grpc"
+Name     = "web-service"
+Protocol = "http"   # or "tcp" for HTTPS-native services
 ```
 
-**Apply changes:** `consul config write my-service-defaults.hcl`
+**Apply changes:**
+```bash
+consul config write services/web-service/defaults.consul.hcl
+```
 
 
-### Service Router (`*-router.hcl`)
+### Intentions (`intentions.consul.hcl`)
 
-Routes traffic within a service based on path prefixes to different service subsets.
+Controls which sources are allowed to send traffic to a service. `Name` is the destination (receiver); `Sources` lists who can connect.
+
+```hcl
+Kind = "service-intentions"
+Name = "web-service"    # Destination: who receives traffic
+
+Sources = [
+  { Name = "api-gateway", Action = "allow" },   # Allow inbound from API Gateway
+]
+```
+
+**Apply changes:**
+```bash
+consul config write services/web-service/intentions.consul.hcl
+```
+
+
+### Service Router (`router.consul.hcl`)
+
+Routes east-west traffic (service-to-service) by path prefix to different service subsets. Applied by the Connect sidecar — **not** applied by the API Gateway. Use for internal routing only, not for north-south ingress.
 
 ```hcl
 Kind = "service-router"
@@ -66,149 +133,71 @@ Name = "business-service"
 
 Routes = [
   {
-    Match {
-      HTTP {
-        PathPrefix = "/legacy-business-service"
-      }
-    }
-    Destination {
-      Service = "business-service-api"
-    }
+    Match       = { HTTP = { PathPrefix = "/business-service-api" } }
+    Destination = { Service = "business-service-api" }
   }
 ]
 ```
 
-**Apply changes:** `consul config write business-service-router.hcl`
-
-
-### Intentions (`*-intentions.hcl`)
-
-Controls which source services are allowed to send traffic to a destination service. The `Name` field specifies the **destination** (receiver), and `Sources` lists **who can connect to it**.
-
-```hcl
-Kind = "service-intentions"
-Name = "web-service"        # Destination: who receives traffic
-
-Sources = [
-  {
-    Name   = "ingress-gateway"  # Source: who is allowed to send traffic
-    Action = "allow"
-  }
-]
+**Apply changes:**
+```bash
+consul config write services/business-service/router.consul.hcl
 ```
 
-This example allows `ingress-gateway` to send traffic to `web-service`.
 
-**Apply changes:** `consul config write web-service-intentions.hcl`
+### URL Rewrites (`nginx-rewrite/job.nomad.hcl` or `traefik-rewrite/job.nomad.hcl`)
 
+The API Gateway's `URLRewrite` supports full-path replacement only — no regex, no capture groups, no query-param injection. For regex rewrites (e.g. `/download/abc123` → `/service/download.xhtml?token=abc123`), configure the rewriter (nginx or Traefik) that sits in front of the API Gateway.
 
-### URL Rewrites (`traefik-rewrite.hcl`)
-
-Traefik handles complex URL transformations before traffic reaches Envoy.
-
-```yaml
-http:
-  routers:
-    download-rewrite:
-      rule: "HostRegexp(`business-service`) && PathPrefix(`/download`)"
-      middlewares:
-        - download-rewrite
-      service: ingress-gateway
-
-  middlewares:
-    download-rewrite:
-      replacePathRegex:
-        regex: "^/download/(.*)$"
-        replacement: "/business-service/download.xhtml?token=$1"
-```
-
-**Apply changes:** `nomad job run traefik-rewrite.hcl`
-
-
-### Service Deployment (`*-service.hcl`)
-
-Nomad job that runs the actual application containers with Consul Connect sidecars.
-
-```hcl
-job "web-service" {
-  group "web" {
-    network {
-      mode = "bridge"
-      port "http" { to = 80 }
-    }
-
-    service {
-      name = "web-service"
-      port = "http"
-
-      connect {
-        sidecar_service {}
-      }
-    }
-
-    task "web" {
-      driver = "docker"
-      config {
-        image = "my-image:latest"
-      }
-    }
-  }
+nginx example (inside the `args` heredoc in `job.nomad.hcl`):
+```nginx
+location ~ ^/download/(.*)$ {
+    rewrite ^/download/(.*)$ /business-service/download.xhtml?token=$1 break;
+    proxy_pass http://api_gateway_http;
 }
 ```
 
-**Apply changes:** `nomad job run web-service.hcl`
+**Apply changes:**
+```bash
+nomad job stop nginx-rewrite
+nomad job run infrastructure/nginx-rewrite/job.nomad.hcl
+# or
+nomad job stop traefik-rewrite
+nomad job run infrastructure/traefik-rewrite/job.nomad.hcl
+```
 
 
 ## Adding a New Service
 
-1. **Create service-defaults** (Consul config entry)
-   ```bash
-   # Create new-service-defaults.hcl
-   consul config write new-service-defaults.hcl
-   ```
-
-2. **Create Nomad job** (service deployment with sidecar)
-   ```bash
-   # Create new-service.hcl
-   nomad job run new-service.hcl
-   ```
-
-3. **Add to ingress gateway** (if externally accessible)
-   ```bash
-   # Edit ingress-gateway.hcl, add service block
-   nomad job run ingress-gateway.hcl
-   ```
-
-4. **Update intentions** (if needed for authorization)
-   ```bash
-   # Edit web-service-intentions.hcl or create new-service-intentions.hcl
-   consul config write web-service-intentions.hcl
-   ```
-
-
-## Note on Ingress Gateway Configuration
-
-Ingress gateway routing (host → service mapping) is defined directly in the Nomad job (`ingress-gateway.hcl`) rather than a separate Consul config entry. This avoids conflicts where Nomad would overwrite the Consul config on job deployment.
+See [ADDING_A_SERVICE.md](ADDING_A_SERVICE.md) for the full checklist — infrastructure
+implications, required files, apply order, and connection impact.
 
 
 ## Quick Reference Commands
 
 ```bash
 # Consul config entries
-consul config write <file>.hcl          # Apply config
-consul config read -kind <kind> -name <name>  # Read config
-consul config delete -kind <kind> -name <name>  # Delete config
-consul config list -kind <kind>         # List configs
+consul config write <file>.hcl                   # Apply config
+consul config read -kind <kind> -name <name>     # Read config
+consul config delete -kind <kind> -name <name>   # Delete config
+consul config list -kind <kind>                  # List configs
+
+# API Gateway
+consul config list -kind api-gateway
+consul config list -kind http-route
+consul config list -kind tcp-route
 
 # Nomad jobs
-nomad job run <file>.hcl               # Deploy/update job
-nomad job stop <job-name>              # Stop job
-nomad job stop -purge <job-name>       # Stop and cleanup
-nomad status                           # List all jobs
-nomad job status <job-name>            # Job details
+nomad job run <file>.hcl                         # Deploy/update job
+nomad job stop <job-name>                        # Stop job
+nomad job stop -purge <job-name>                 # Stop and cleanup
+nomad status                                     # List all jobs
+nomad job status <job-name>                      # Job details
 
-# Debugging
-consul catalog services                 # List registered services
-consul connect envoy -gateway=ingress -register  # Debug gateway
-nomad alloc logs <alloc-id>            # View task logs
+# Debugging Envoy (admin API on any node)
+curl http://localhost:19000/config_dump           # Full Envoy config
+curl http://localhost:19000/clusters              # Upstream clusters
+curl http://localhost:19000/listeners             # Active listeners
+nomad alloc logs <alloc-id> api                  # Envoy logs
+nomad alloc logs <alloc-id> setup                # Setup task logs (NWI login, bootstrap)
 ```

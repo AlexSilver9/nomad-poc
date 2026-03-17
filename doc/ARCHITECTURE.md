@@ -60,9 +60,9 @@ nginx/Traefik runs on **host network** and always forwards to `127.0.0.1:8080` /
 
 Plain HTTP services require only Consul config entries and a Nomad job — no port or infrastructure changes.
 
-Every HTTPS-native service requires a new dedicated internal port between nginx and the API Gateway: new TCP listener in `gateway.consul.hcl`, new static port in `job.nomad.hcl`, new `server_name` block in `nginx-rewrite/job.nomad.hcl`. No security group or ALB changes are needed — the new port is loopback-only (`127.0.0.1`), and the ALB already forwards all `:8443` traffic to nginx which handles hostname routing.
+Every HTTPS-native service requires a new dedicated internal port between the rewriter and the API Gateway: new TCP listener in `gateway.consul.hcl`, new static port in `job.nomad.hcl`, new server block in the rewriter job. No security group or ALB changes are needed — the new port is loopback-only (`127.0.0.1`), and the ALB already forwards all `:8443` traffic to nginx/Traefik which handles hostname routing.
 
-See [API_GATEWAY.md — Adding a new service](API_GATEWAY.md#adding-a-new-service) for the full checklist.
+See [ADDING_A_SERVICE.md](ADDING_A_SERVICE.md) for the full checklist.
 
 ---
 
@@ -100,7 +100,7 @@ API Gateway :8080
   └─ ...one http-route config entry per service
 ```
 
-Routing rules live in `infrastructure/api-gateway/routes/<service>.consul.hcl` (http-route).
+Routing rules live in `services/<service>/route.consul.hcl` (http-route).
 The gateway listener is declared in `infrastructure/api-gateway/gateway.consul.hcl`.
 Rewriter rules live in `infrastructure/nginx-rewrite/job.nomad.hcl` or
 `infrastructure/traefik-rewrite/job.nomad.hcl`.
@@ -158,7 +158,7 @@ entry (Traefik).
 | File | Kind | Purpose |
 |---|---|---|
 | `infrastructure/api-gateway/gateway.consul.hcl` | `api-gateway` | Declares listeners (:8080 http, :8082 tcp) |
-| `infrastructure/api-gateway/routes/<svc>.consul.hcl` | `http-route` / `tcp-route` | Hostname + path routing rules per service |
+| `services/<svc>/route.consul.hcl` | `http-route` / `tcp-route` | Hostname + path routing rules per service |
 | `services/<svc>/defaults.consul.hcl` | `service-defaults` | Sets protocol (http/tcp) for each service |
 | `services/<svc>/router.consul.hcl` | `service-router` | East-west path routing (not applied by API Gateway) |
 

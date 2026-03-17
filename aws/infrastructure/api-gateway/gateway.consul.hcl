@@ -1,5 +1,5 @@
 # Consul API Gateway configuration entry.
-# Declares the gateway listeners. Routes are defined separately in routes/*.consul.hcl.
+# Declares the gateway listeners. Routes are defined separately in services/<svc>/route.consul.hcl.
 #
 # Apply: consul config write gateway.consul.hcl
 #

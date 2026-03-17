@@ -16,11 +16,11 @@ JOB_NAME="file-service"
 
 # Step 1: Download required files from GitHub
 echo "=== STEP 1: Download required files ==="
-mkdir -p services/file-service infrastructure/api-gateway/routes
+mkdir -p services/file-service
 wget -q -O "$JOB_FILE" "$GITHUB_RAW_BASE/$JOB_FILE"
 wget -q -O services/file-service/defaults.consul.hcl "$GITHUB_RAW_BASE/services/file-service/defaults.consul.hcl"
 wget -q -O services/file-service/intentions.consul.hcl "$GITHUB_RAW_BASE/services/file-service/intentions.consul.hcl"
-wget -q -O infrastructure/api-gateway/routes/file-service.consul.hcl "$GITHUB_RAW_BASE/infrastructure/api-gateway/routes/file-service.consul.hcl"
+wget -q -O services/file-service/route.consul.hcl "$GITHUB_RAW_BASE/services/file-service/route.consul.hcl"
 echo "Downloaded job, Consul config, and route files"
 
 read -p "Press Enter to apply Consul configurations and add api-gateway route..."
@@ -32,7 +32,7 @@ consul config write services/file-service/intentions.consul.hcl
 echo "Consul service-defaults and intentions applied"
 
 echo "=== Adding file-service route to api-gateway ==="
-consul config write infrastructure/api-gateway/routes/file-service.consul.hcl
+consul config write services/file-service/route.consul.hcl
 echo "Route added (Envoy reloads automatically)"
 
 read -p "Press Enter to deploy file-service..."

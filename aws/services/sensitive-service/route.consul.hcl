@@ -1,5 +1,5 @@
 # HTTPRoute for sensitive-service.
-# Apply: consul config write routes/sensitive-service.consul.hcl
+# Apply: consul config write services/sensitive-service/route.consul.hcl
 # Delete: consul config delete -kind http-route -name sensitive-service
 
 Kind      = "http-route"

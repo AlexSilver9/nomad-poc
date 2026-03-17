@@ -1,5 +1,5 @@
 # HTTPRoute for rolling-update-service.
-# Apply: consul config write routes/rolling-update-service.consul.hcl
+# Apply: consul config write services/rolling-update-service/route.consul.hcl
 # Delete: consul config delete -kind http-route -name rolling-update-service
 
 Kind      = "http-route"

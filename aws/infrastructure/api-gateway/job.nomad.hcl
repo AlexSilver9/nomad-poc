@@ -23,7 +23,7 @@
 # Prerequisites:
 #   - CNI plugins installed on all nodes (done by setup_nomad_aws_ami.sh)
 #   - Consul API Gateway config entry written (infrastructure/api-gateway/gateway.consul.hcl)
-#   - Routes written (infrastructure/api-gateway/routes/*.consul.hcl)
+#   - Routes written (services/<svc>/route.consul.hcl)
 #   - For ACL: bootstrap_acl.sh must be run before enforce_acl.sh (sets up NWI + binding rule)
 #
 # Run: nomad job run infrastructure/api-gateway/job.nomad.hcl

@@ -10,7 +10,7 @@
 #   API Gateway (here):     full-path replacement   → /api → /business-service/api
 #   service-router:         prefix + suffix kept    → east-west only (not applied by API Gateway)
 #
-# Apply: consul config write routes/business-service.consul.hcl
+# Apply: consul config write services/business-service/route.consul.hcl
 # Delete: consul config delete -kind http-route -name business-service
 
 Kind      = "http-route"

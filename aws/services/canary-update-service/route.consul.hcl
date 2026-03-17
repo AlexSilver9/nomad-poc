@@ -1,5 +1,5 @@
 # HTTPRoute for canary-update-service.
-# Apply: consul config write routes/canary-update-service.consul.hcl
+# Apply: consul config write services/canary-update-service/route.consul.hcl
 # Delete: consul config delete -kind http-route -name canary-update-service
 
 Kind      = "http-route"

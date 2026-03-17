@@ -18,11 +18,11 @@ JOB_NAME="sensitive-service"
 
 # Step 1: Download required files from GitHub
 echo "=== STEP 1: Download required files ==="
-mkdir -p services/sensitive-service infrastructure/api-gateway/routes
+mkdir -p services/sensitive-service
 wget -q -O "$JOB_FILE" "$GITHUB_RAW_BASE/$JOB_FILE"
 wget -q -O services/sensitive-service/defaults.consul.hcl "$GITHUB_RAW_BASE/services/sensitive-service/defaults.consul.hcl"
 wget -q -O services/sensitive-service/intentions.consul.hcl "$GITHUB_RAW_BASE/services/sensitive-service/intentions.consul.hcl"
-wget -q -O infrastructure/api-gateway/routes/sensitive-service.consul.hcl "$GITHUB_RAW_BASE/infrastructure/api-gateway/routes/sensitive-service.consul.hcl"
+wget -q -O services/sensitive-service/route.consul.hcl "$GITHUB_RAW_BASE/services/sensitive-service/route.consul.hcl"
 echo "Downloaded job, Consul config, and route files"
 
 read -p "Press Enter to apply Consul configurations and add api-gateway route..."
@@ -34,7 +34,7 @@ consul config write services/sensitive-service/intentions.consul.hcl
 echo "Consul service-defaults and intentions applied"
 
 echo "=== Adding sensitive-service route to api-gateway ==="
-consul config write infrastructure/api-gateway/routes/sensitive-service.consul.hcl
+consul config write services/sensitive-service/route.consul.hcl
 echo "Route added (Envoy reloads automatically)"
 
 read -p "Press Enter to deploy sensitive-service to the isolated node pool..."

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Routing test script for Consul API Gateway.
-# Tests HTTP routing rules configured in aws/infrastructure/api-gateway/routes/.
+# Tests HTTP routing rules configured in aws/services/<svc>/route.consul.hcl.
 # Usage: ./test_routing.sh [NODE_IP]
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

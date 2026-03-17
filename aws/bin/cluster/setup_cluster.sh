@@ -305,9 +305,9 @@ configure_consul() {
         "services/https-service/intentions.consul.hcl"
         "services/business-service/router.consul.hcl"
         "infrastructure/api-gateway/gateway.consul.hcl"
-        "infrastructure/api-gateway/routes/web-service.consul.hcl"
-        "infrastructure/api-gateway/routes/business-service.consul.hcl"
-        "infrastructure/api-gateway/routes/https-service.consul.hcl"
+        "services/web-service/route.consul.hcl"
+        "services/business-service/route.consul.hcl"
+        "services/https-service/route.consul.hcl"
     )
     for file in "${consul_files[@]}"; do
         local dir=$(dirname "$file")

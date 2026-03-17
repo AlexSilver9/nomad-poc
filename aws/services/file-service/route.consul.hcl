@@ -1,5 +1,5 @@
 # HTTPRoute for file-service.
-# Apply: consul config write routes/file-service.consul.hcl
+# Apply: consul config write services/file-service/route.consul.hcl
 # Delete: consul config delete -kind http-route -name file-service
 
 Kind      = "http-route"

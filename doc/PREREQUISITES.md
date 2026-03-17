@@ -35,9 +35,9 @@ The `NOMAD-CONSUL` security group (e.g. `sg-08e51d2a581377e0b`) must allow the p
 | 4646 | TCP | Operator IPs, ALB SG | Nomad HTTP API and UI |
 | 4647 | TCP | EC2 nodes (self) | Nomad RPC (server-to-server, client-to-server) |
 | 4648 | TCP + UDP | EC2 nodes (self) | Nomad Serf gossip (cluster membership) |
-| 8080 | TCP | EC2 nodes (self) | Consul API Gateway HTTP listener (nginx → gateway, internal only) |
+| 8080 | TCP | EC2 nodes (self) | Consul API Gateway HTTP listener (nginx → gateway via loopback — no SG rule strictly required) |
 | 8081 | TCP | ALB SG, operator IPs | nginx/Traefik HTTP rewriter (ALB target port) |
-| 8082 | TCP | EC2 nodes (self) | Consul API Gateway TCP listener (nginx → gateway, internal only) |
+| 8082 | TCP | EC2 nodes (self) | Consul API Gateway TCP listener (nginx → gateway via loopback — no SG rule strictly required; additional HTTPS-native services add 8083, 8084, … also loopback-only) |
 | 8300 | TCP | EC2 nodes (self) | Consul RPC (server-to-server) |
 | 8301 | TCP + UDP | EC2 nodes (self) | Consul Serf LAN gossip (cluster membership) |
 | 8443 | TCP | Operator IPs | nginx/Traefik HTTPS rewriter (direct node access, not via ALB in POC) |

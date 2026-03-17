@@ -107,7 +107,7 @@ EAST-WEST (sidecar-to-sidecar):
 
 This is why a `PrefixRewrite` in a service-router has no effect on traffic
 arriving via the API Gateway. See [HTTPS_ROUTING.md](HTTPS_ROUTING.md) and
-`infrastructure/api-gateway/routes/` for the current routing configuration.
+`services/<svc>/route.consul.hcl` for the current routing configuration.
 
 ---
 

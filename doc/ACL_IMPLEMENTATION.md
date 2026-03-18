@@ -92,6 +92,8 @@ Roles are created by `create_user_tokens.sh` (idempotent — safe to re-run).
 
 Personal tokens tie a named person to a specific set of roles. Each person gets two tokens: one for Nomad, one for Consul.
 
+For the full step-by-step procedure, see [USER_TOKENS.md](USER_TOKENS.md).
+
 ### Access levels
 
 | Level | Nomad roles | Consul roles | Use case |
@@ -277,7 +279,7 @@ If the script is run again after a successful bootstrap, the bootstrap steps are
 After running the standard setup scripts on the new instance, run:
 
 ```shell
-./aws/bin/instance/onboard_node.sh
+./aws/bin/instance/apply_acl_tokens_to_node.sh
 ```
 
 The script prompts for the Consul agent token and the Nomad Consul token (both from the password manager). If the cluster is already in enforce mode (`default_policy = "deny"`), it also prompts for the Consul management token, which is required to authenticate the agent token application. It then:

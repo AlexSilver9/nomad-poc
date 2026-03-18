@@ -15,7 +15,7 @@ set -euo pipefail
 #
 # You will be prompted for token values. Get them from the password manager.
 #
-# Usage: ./onboard_node.sh
+# Usage: ./apply_acl_tokens_to_node.sh
 
 echo "========================================="
 echo "Node ACL Onboarding"
@@ -58,7 +58,7 @@ fi
 echo ""
 echo "Writing /etc/consul.d/acl.hcl..."
 sudo tee /etc/consul.d/acl.hcl > /dev/null <<HCLEOF
-# ACL configuration — written by onboard_node.sh
+# ACL configuration — written by apply_acl_tokens_to_node.sh
 acl {
   enabled                  = true
   default_policy           = "$CONSUL_DEFAULT_POLICY"
@@ -85,7 +85,7 @@ CONSUL_HTTP_TOKEN="$CONSUL_MGMT_TOKEN" consul acl set-agent-token agent "$CONSUL
 
 echo "Writing /etc/nomad.d/acl.hcl..."
 sudo tee /etc/nomad.d/acl.hcl > /dev/null <<'HCLEOF'
-# ACL configuration — written by onboard_node.sh
+# ACL configuration — written by apply_acl_tokens_to_node.sh
 acl {
   enabled = true
 }
@@ -93,7 +93,7 @@ HCLEOF
 
 echo "Writing /etc/nomad.d/consul-token.hcl..."
 sudo tee /etc/nomad.d/consul-token.hcl > /dev/null <<HCLEOF
-# Consul token for Nomad's Consul integration — written by onboard_node.sh
+# Consul token for Nomad's Consul integration — written by apply_acl_tokens_to_node.sh
 consul {
   token = "$NOMAD_CONSUL_TOKEN"
 }

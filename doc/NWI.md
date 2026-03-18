@@ -1,85 +1,85 @@
 # Nomad Workload Identity (NWI) with Consul
 
 Nomad Workload Identity (NWI) lets Nomad tasks authenticate to Consul using short-lived,
-automatically-rotated JWTs instead of static Consul tokens. This document covers how it is
-used for the Consul API Gateway job and what was set up to make it work.
+automatically-rotated JWTs instead of static Consul tokens.
 
-## Background: why NWI for the API Gateway
+For the overall API Gateway architecture and route configuration, see [API_GATEWAY.md](API_GATEWAY.md).
 
-The Consul API Gateway runs as a custom Nomad job (two tasks: `setup` + `api`) because Nomad
-has no native `connect { gateway { api {} } }` jobspec support — that block type does not exist
-like `connect { sidecar_service {} }` in nomad jobs.
-The `setup` task runs `consul connect envoy -gateway api -register`, which needs a
-Consul token with `builtin/api-gateway` permissions to register the gateway and receive xDS
-routing configuration.
+## What is NWI
 
-Options considered:
+When a Nomad allocation starts, the Nomad server mints a signed JWT for each task that has
+an `identity` block. The JWT is signed with the Nomad cluster keyring and scoped to a
+specific audience (e.g. `consul.io`). The task can then present this JWT to Consul's auth
+method to receive a scoped Consul ACL token — without any static token ever being stored
+anywhere.
 
 | Approach | Token storage | Security | Job spec |
 |---|---|---|---|
 | Static token in Nomad Variables + template | Nomad Variables (encrypted at rest) | Token is long-lived | Template block (verbose) |
 | **NWI** (chosen) | Never stored — generated per-allocation | Short-lived, scoped JWT | `identity` block (clean) |
 
-NWI was chosen because it avoids storing any static Consul token and the job spec stays clean.
+## When to use NWI
 
-## How it works
+Use NWI for any task that needs to call the Consul API directly and requires a scoped token:
+
+- **Custom gateway tasks** (e.g. the Consul API Gateway `setup` task) that must register
+  themselves and receive xDS routing configuration
+- Any task that needs Consul KV, catalog, or ACL operations beyond what a Connect sidecar
+  provides automatically
+
+**Regular workloads** (services with Connect sidecars) do not need `identity` blocks. Their
+sidecar proxies receive tokens automatically — Nomad handles this internally using the
+default binding rules created by `nomad setup consul`.
+
+## How NWI works
 
 ```
-Nomad (setup task starts)
+Nomad server (task starts)
   │
   ├─ mints a short-lived JWT signed by the Nomad cluster keyring
-  │   audience: ["consul.io"]
-  │   writes JWT to ${NOMAD_SECRETS_DIR}/consul_api_gateway
+  │   audience:  ["consul.io"]  (set in the identity block)
+  │   ttl:       1h             (set in the identity block)
   │
   │   NOTE: Nomad does NOT automatically exchange the JWT for a Consul token for custom tasks.
-  │   Automatic token injection only happens for Connect sidecars (managed by Nomad internally).
-  │   For custom tasks like the setup task, the command must explicitly call consul acl login.
+  │   Automatic token injection only happens for Connect sidecars managed by Nomad internally.
+  │   Custom tasks must explicitly call consul login to exchange the JWT.
   │
-  ├─ setup command calls consul acl login:
-  │   consul acl login -method nomad-workloads
-  │     -bearer-token-file ${NOMAD_SECRETS_DIR}/consul_api_gateway
-  │     -token-sink-file ${NOMAD_ALLOC_DIR}/consul.token
-  │   → Consul fetches Nomad's JWKS, validates JWT, applies binding rules, issues token
-  │   → token written to consul.token file (|| true — graceful fallback when ACL not bootstrapped)
+  ├─ JWT is exposed to the task via env var (requires env = true in the identity block):
+  │   NOMAD_TOKEN_<identity-name>
   │
-  └─ Consul applies the api-gateway binding rule and issues a Consul ACL token:
-      • api-gateway rule → builtin/api-gateway (service-write + read all services/nodes)
-        selector: "nomad_service" not in value and value.nomad_job_id=="api-gateway"
-
-The setup command reads the token from the file and passes it to consul connect envoy:
-  export CONSUL_HTTP_TOKEN=$(cat ${NOMAD_ALLOC_DIR}/consul.token 2>/dev/null || echo '')
-  consul connect envoy -gateway api ...
-  (if consul.token is empty — ACL not bootstrapped — anonymous access works in allow mode)
+  └─ Task calls consul login to exchange the JWT for a Consul ACL token:
+      echo "$NOMAD_TOKEN_<name>" > nwi.jwt
+      consul login -method nomad-workloads \
+        -bearer-token-file nwi.jwt \
+        -token-sink-file consul.token
+      → Consul fetches Nomad's JWKS at /.well-known/jwks.json, validates the JWT signature
+      → Consul applies matching binding rules and issues a scoped ACL token
+      → token written to consul.token
+      export CONSUL_HTTP_TOKEN=$(cat consul.token || echo '')
 ```
 
-## What builtin/api-gateway grants
-
-`builtin/api-gateway` is a Consul built-in templated policy. When instantiated with
-`Name=api-gateway`, it grants:
+### identity block fields
 
 ```hcl
-service "api-gateway" { policy = "write" }   # self-registration
-node_prefix ""          { policy = "read"  }  # xDS: read node info for routing
-service_prefix ""       { policy = "read"  }  # xDS: read all services for routing
+identity {
+  name        = "<name>"       # arbitrary; becomes NOMAD_TOKEN_<name> env var
+  aud         = ["consul.io"]  # must match the Consul auth method's bound audiences
+  ttl         = "1h"           # JWT lifetime — sufficient for prestart tasks
+  env         = true           # exposes JWT as env var (required — file = true unreliable in Nomad 1.11.2)
+  change_mode = "restart"      # silences Nomad warning for env=true; no-op for prestart tasks
+}
 ```
 
-No custom Consul policy file is needed — `builtin/api-gateway` is built into Consul 1.15+.
+### HCL interpolation note
 
-## Graceful no-ACL behaviour
+In Nomad job spec `args`, use `$VAR` (no curly braces) for shell variables that should be
+expanded at runtime inside the container. Nomad only interpolates `${...}` — curly-brace
+forms are evaluated by Nomad before the container starts and will fail if the variable is
+not a Nomad attribute or metadata key.
 
-The `identity` block is always present in the job spec. When ACL has not been bootstrapped:
+## Setup: bootstrap_acl.sh Phase 4
 
-- No `nomad-workloads` auth method exists → Nomad cannot exchange the JWT → `CONSUL_TOKEN`
-  is not injected → `CONSUL_HTTP_TOKEN=$CONSUL_TOKEN` resolves to an empty string
-- Consul's `default_policy = "allow"` accepts anonymous (empty-token) access
-- The gateway starts normally
-
-Once `bootstrap_acl.sh` is run and then `enforce_acl.sh` switches to `default_policy = "deny"`,
-the token must be present. NWI supplies it automatically on the next allocation start.
-
-## Setup: what bootstrap_acl.sh does (Phase 4)
-
-Phase 4 runs inside Phase 3's success block (both Consul and Nomad management tokens available):
+NWI requires two one-time setup steps run by `bootstrap_acl.sh` Phase 4:
 
 **Step 1 — `nomad setup consul`**
 
@@ -90,12 +90,15 @@ CONSUL_HTTP_TOKEN=<consul-mgmt> NOMAD_TOKEN=<nomad-mgmt> \
 
 Creates in Consul:
 - JWT auth method `nomad-workloads` pointing to Nomad's JWKS endpoint
-- ACL role `nomad-default-tasks` with read-only permissions for Nomad tasks
+- ACL role `nomad-default-tasks` with read-only permissions for general Nomad tasks
 - Default binding rules for Nomad services and tasks
 
-`-y` makes it non-interactive. The command is idempotent — safe to re-run.
+The command is idempotent — safe to re-run.
 
-**Step 2 — api-gateway binding rule**
+**Step 2 — per-job binding rules**
+
+Each job using NWI needs a binding rule that maps its JWT claims to a Consul policy.
+Example for the api-gateway (see the API Gateway section below):
 
 ```bash
 CONSUL_HTTP_TOKEN=<consul-mgmt> consul acl binding-rule create \
@@ -107,92 +110,147 @@ CONSUL_HTTP_TOKEN=<consul-mgmt> consul acl binding-rule create \
 ```
 
 Selector breakdown:
-- `"nomad_service" not in value` — matches tasks only (not Connect sidecar service registrations)
-- `value.nomad_job_id=="api-gateway"` — scoped to the api-gateway job specifically
+- `"nomad_service" not in value` — matches tasks (not Connect sidecar service registrations)
+- `value.nomad_job_id=="api-gateway"` — scoped to this job only
 
-`Name=${value.nomad_job_id}` passes the job name (`api-gateway`) to the templated policy,
-instantiating `builtin/api-gateway` with `service "api-gateway" { policy = "write" }`.
+**Verify NWI is configured**:
 
-## Job spec
+```bash
+CONSUL_HTTP_TOKEN=<mgmt> consul acl auth-method list
+# Should list 'nomad-workloads'
 
-The relevant parts of `aws/infrastructure/api-gateway/job.nomad.hcl`:
+CONSUL_HTTP_TOKEN=<mgmt> consul acl binding-rule list -method nomad-workloads
+# Should list default rules + any job-specific rules
+```
+
+**If bootstrap_acl.sh was already run without Phase 4**: run the two commands above manually
+on any cluster node, with both management tokens set.
+
+## Graceful behaviour before ACL is bootstrapped
+
+The `identity` block can be present in the job spec from the start. Before `bootstrap_acl.sh`
+is run, the `consul login` call falls back gracefully (`|| true`) because the `nomad-workloads`
+auth method does not exist yet:
+
+- `consul login` fails → `consul.token` is empty → `CONSUL_HTTP_TOKEN=""` → anonymous access
+- Consul's `default_policy = "allow"` accepts anonymous access
+- The task works normally
+
+Once `enforce_acl.sh` switches to `default_policy = "deny"`, the token must be present — NWI
+supplies it automatically on the next allocation start.
+
+## Token lifetime
+
+The JWT TTL is set in the `identity` block (`ttl = "1h"`). For prestart tasks that run for a
+few seconds, the lifetime is not a concern. If tasks queue for over an hour under sustained
+cluster load, increase the TTL.
+
+---
+
+## Example: Consul API Gateway
+
+The api-gateway is the primary use of NWI in this cluster. Its `setup` task must call
+`consul connect envoy -gateway api -register` which requires a Consul token with
+`builtin/api-gateway` permissions to self-register and receive xDS routing configuration.
+
+### Why NWI (not a static token)
+
+The `setup` task runs `consul connect envoy -gateway api -register`. It needs a Consul token
+with write permission on the `api-gateway` service and read access to all services and nodes
+(for xDS routing). Storing a static token for this purpose would be long-lived and require
+secure distribution. NWI provides a per-allocation, short-lived token with no storage needed.
+
+### What builtin/api-gateway grants
+
+`builtin/api-gateway` is a Consul built-in templated policy.
+When instantiated with `Name=api-gateway` it grants:
+
+```hcl
+service "api-gateway" { policy = "write" }   # self-registration
+node_prefix ""          { policy = "read"  }  # xDS: read node info for routing
+service_prefix ""       { policy = "read"  }  # xDS: read all services for routing
+```
+
+No custom Consul policy file is needed.
+
+### Job spec
 
 ```hcl
 task "setup" {
-  # ...
+  lifecycle { hook = "prestart"; sidecar = false }
 
   identity {
-    name = "consul_api_gateway"
-    aud  = ["consul.io"]
-    ttl  = "1h"
+    name        = "consul_api_gateway"
+    aud         = ["consul.io"]
+    ttl         = "1h"
+    env         = true
+    change_mode = "restart"
   }
 
   config {
     image   = "hashicorp/consul:1.22.3"
     command = "/bin/sh"
-    args = [
-      "-c",
-      join(" && ", [
-        "consul acl login -method nomad-workloads -bearer-token-file ${NOMAD_SECRETS_DIR}/consul_api_gateway -token-sink-file ${NOMAD_ALLOC_DIR}/consul.token 2>/dev/null || true",
-        "export CONSUL_HTTP_TOKEN=$(cat ${NOMAD_ALLOC_DIR}/consul.token 2>/dev/null || echo '')",
-        "consul connect envoy -gateway api -register ... -bootstrap > ${NOMAD_ALLOC_DIR}/envoy_bootstrap.json"
-      ])
-    ]
+    args = ["-c", join(" && ", [
+      "echo \"$NOMAD_TOKEN_consul_api_gateway\" > ${NOMAD_SECRETS_DIR}/nwi.jwt && consul login -method nomad-workloads -bearer-token-file ${NOMAD_SECRETS_DIR}/nwi.jwt -token-sink-file ${NOMAD_ALLOC_DIR}/consul.token || true",
+      "export CONSUL_HTTP_TOKEN=$(cat ${NOMAD_ALLOC_DIR}/consul.token || echo '')",
+      "consul connect envoy -gateway api -register -deregister-after-critical 10s -service ${NOMAD_JOB_NAME} -admin-bind 0.0.0.0:19000 -ignore-envoy-compatibility -bootstrap > ${NOMAD_ALLOC_DIR}/envoy_bootstrap.json"
+    ])]
   }
 
   env {
+    # Node IP required — bridge networking containers cannot reach the host loopback
     CONSUL_HTTP_ADDR = "http://${attr.unique.network.ip-address}:8500"
     CONSUL_GRPC_ADDR = "${attr.unique.network.ip-address}:8502"
   }
 }
 ```
 
-`$CONSUL_TOKEN` (no curly braces) is a shell variable — Nomad only interpolates `${...}`,
-so it reaches the container's shell as a runtime env var expansion. `${attr...}` and
-`${NOMAD_JOB_NAME}` use curly braces and are interpolated by Nomad before the container starts.
+### Operational notes
 
-## Operational notes
-
-**After running bootstrap_acl.sh**: no immediate restart needed. Consul still runs with
-`default_policy = "allow"` — the gateway works without a token. The restart is only required
-**before running `enforce_acl.sh`** (which switches to deny mode). At that point the running
-allocation was started before NWI existed and has no Consul token, so it would lose its xDS
-connection once anonymous access is blocked.
+**Before enforce_acl.sh**: restart the api-gateway so the new allocation starts with a NWI
+token (the allocation running before bootstrap_acl.sh was run has no token and will lose its
+xDS connection the moment deny mode is activated):
 
 ```bash
-# Run this right before enforce_acl.sh, not after bootstrap_acl.sh:
 nomad job stop api-gateway
 nomad job run infrastructure/api-gateway/job.nomad.hcl
 ```
 
-**Regular workloads** (web-service, business-service, etc.) do not need `identity` blocks.
-Their Connect sidecars are automatically handled by Nomad using the default binding rules
-created by `nomad setup consul`.
+**Adding a new node**: no changes needed — NWI is configured in Consul and Nomad server
+state, not per-node.
 
-**Adding a new node**: `onboard_node.sh` does not need changes — NWI is cluster-wide
-(configured in Consul and Nomad server state, not per-node).
+---
 
-**Verify NWI is configured**:
+## Future improvement: agent-level task_identity
 
-```bash
-# Should list 'nomad-workloads'
-CONSUL_HTTP_TOKEN=<mgmt> consul acl auth-method list
+The current approach uses a job-level `identity` block + explicit `consul login` in the task
+command. Nomad 1.7+ supports an alternative: `task_identity` in the Nomad agent's `consul {}`
+stanza, which makes Nomad automatically derive a Consul token for every task and inject it as
+`CONSUL_HTTP_TOKEN` — no `identity` block or `consul login` needed in the job spec.
 
-# Should list binding rules including the api-gateway rule
-CONSUL_HTTP_TOKEN=<mgmt> consul acl binding-rule list -method nomad-workloads
+```hcl
+# /etc/nomad.d/consul.hcl (written by bootstrap_acl.sh)
+consul {
+  task_identity {
+    aud = ["consul.io"]
+    ttl = "1h"
+  }
+}
 ```
 
-**If bootstrap_acl.sh was already run without Phase 4** (e.g. first run was on main branch):
-run the two commands manually on any cluster node, with both management tokens set.
-
-## Token lifetime
-
-The JWT TTL is set to `1h` in the `identity` block. The `setup` task is a prestart task that
-runs for a few seconds (bootstrap config generation), so the token lifetime is not a concern.
-If the cluster is under sustained load and prestart tasks queue for over an hour, the JWT
-would expire before being used — increase the TTL if this ever becomes an issue.
+**Why not done yet:** `task_identity` issues tokens to all tasks, which requires additional
+binding rules in `bootstrap_acl.sh` to scope permissions correctly. The current per-job
+`identity` approach is more surgical and easier to audit. Worth adopting if more jobs need
+direct Consul API access in the future.
 
 ## Relation to ACL documentation
 
 See [ACL_IMPLEMENTATION.md](ACL_IMPLEMENTATION.md) for the full ACL bootstrap procedure.
 NWI is Phase 4 of `bootstrap_acl.sh` and must run before `enforce_acl.sh`.
+
+## References
+
+- https://github.com/hashicorp-guides/consul-api-gateway-on-nomad — primary reference for NWI + api-gateway pattern
+- https://developer.hashicorp.com/nomad/docs/concepts/workload-identity — NWI concept, identity block fields
+- https://developer.hashicorp.com/nomad/tutorials/integrate-consul/deploy-api-gateway-on-nomad — step-by-step tutorial
+- https://developer.hashicorp.com/nomad/api-docs/operator/keyring — Nomad keyring and JWKS endpoint

@@ -29,11 +29,21 @@ aws/acl/
 
 Policy and role reference files are committed to git. Token values are never committed — see `.gitignore` in this directory.
 
+## API Gateway and Nomad Workload Identity (NWI)
+
+The Consul API Gateway's `setup` task authenticates to Consul using Nomad Workload Identity (NWI) rather than a static token. NWI mints a short-lived JWT per allocation and exchanges it for a scoped Consul ACL token via `consul login`. No static token is stored anywhere.
+
+NWI is configured in `bootstrap_acl.sh` Phase 4 (`nomad setup consul` + a binding rule for the `api-gateway` job). Before ACL is bootstrapped, the `consul login` call falls back gracefully and the task operates with anonymous access (allowed because `default_policy = "allow"` is still in effect).
+
+For full details, see [NWI.md](NWI.md).
+
 ## Scripts
+
+See [USER_TOKENS.md](USER_TOKENS.md) for the full procedure for creating and managing personal operator tokens.
 
 | Script | Where it runs | Purpose |
 |---|---|---|
 | [`aws/bin/cluster/bootstrap_acl.sh`](../aws/bin/cluster/bootstrap_acl.sh) | Local machine | One-time Day-2 ACL bootstrap for the whole cluster |
 | [`aws/bin/instance/create_user_tokens.sh`](../aws/bin/instance/create_user_tokens.sh) | Cluster node | Create roles and personal user tokens (run after bootstrap) |
 | [`aws/bin/cluster/enforce_acl.sh`](../aws/bin/cluster/enforce_acl.sh) | Local machine | Switch Consul from `allow` to `deny` (maintenance window) |
-| [`aws/bin/instance/onboard_node.sh`](../aws/bin/instance/onboard_node.sh) | New instance | Apply ACL tokens when a new node joins |
+| [`aws/bin/instance/apply_acl_tokens_to_node.sh`](../aws/bin/instance/apply_acl_tokens_to_node.sh) | New instance | Apply ACL tokens when a new node joins |

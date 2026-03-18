@@ -185,19 +185,3 @@ List NWI (Nomad Workload Identity) binding rules:
 ```shell
 consul acl binding-rule list -method nomad-workloads
 ```
-
-# Job Specification
-
-- https://developer.hashicorp.com/nomad/docs/job-specification/job
-
-| Abschnitt                 | Bedeutung                                         |
-|---------------------------|---------------------------------------------------|
-| job "nginx"	            | Name des Jobs                                     |
-| datacenters = ["dc1"]	    | Nomad DC, standardmäßig dc1                       |
-| type = "service"	        | Dauerhafter Service (nicht Batch)                 |
-| group "web"	            | Task-Gruppe → mehrere Tasks gleichzeitig möglich  |
-| task "nginx"	            | Task innerhalb der Gruppe                         |
-| driver = "docker"         | Docker Driver verwenden                           |
-| config.image              | Docker Image                                      |
-| resources	                | CPU / RAM Limits                                  |
-| network.port              | Port-Mapping → Nomad mappt Container Port zu Host |

@@ -53,18 +53,22 @@
 - Update SETUP.md + SERVICES.md
 
 - Zugriff Container Definitionen
+- api-gateway statt ingress-gateway
+- SSL -> ALB -> Nginx SSL -> Payara SSL hostname based routing
+- Nomad Administration Menü wenn ACLS aktiv sind -> Token Revoke per UI
 
 # TODO:
 sudo git pull origin master --rebase
 - CPU & Memory Settings / Limits erarbeiten
-- CNI PATH:
-# Write a drop-in config (no need to touch the main nomad.hcl)
-sudo tee /etc/nomad.d/cni.hcl > /dev/null <<'EOF'
-client {
-  cni_path = "/opt/cni/bin"
-}
-EOF
-sudo systemctl restart nomad
+- Nginx Configs aus Image übernehmen oder Nginx Image übernehmen
+- Make AWS prerequisites configurable: VPC, subnets, security groups, key pair name, instance type, region
+    - Currently hardcoded in create_instances.sh, create_target_group.sh, create_alb.sh
+    - Move to a config file (e.g. aws/config.sh) sourced by all cluster scripts
+- Replace GitHub raw file downloads with `git clone`
+    - setup_cluster.sh currently downloads individual files via wget from raw.githubusercontent.com
+    - Should clone the repo on the node instead, then reference files locally
+    - Avoids broken downloads when files are added/moved and simplifies the download logic
+
 
 # In client config — reserve resources for OS/system, not available to jobs
 reserved {
@@ -74,12 +78,9 @@ reserved {
 }
 
 - ACLs aktiv setzen
-- SSL -> ALB -> Nginx SSL -> Payara SSL
-    - Wie kommt man an den Hostname im Request
-    - Kein Portmapping im ALB
 - Scripts Branches
     - main (prod)
-    - staging (3-5 Nodes)
+    - staging (6 Nodes)
     - dev (1 Node)
 
 - Update CheatSheet

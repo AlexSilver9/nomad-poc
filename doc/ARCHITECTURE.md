@@ -27,7 +27,7 @@ query-param rewrite format; Traefik v3 produces a path-based variant).
    │──────────────────│     │──────────────────│     │──────────────────│
    │ nginx/Traefik    │     │ nginx/Traefik    │     │ nginx/Traefik    │
    │  :8081 (HTTP)    │     │  :8081 (HTTP)    │     │  :8081 (HTTP)    │  regex rewrite
-   │  :8443 (HTTPS)   │     │  :8443 (HTTPS)   │     │  :8443 (HTTPS)   │  TLS term + rewrite + re-ecnrypt
+   │  :8443 (HTTPS)   │     │  :8443 (HTTPS)   │     │  :8443 (HTTPS)   │  TLS term + rewrite + HTTPS hostname routing + re-ecnrypt
    │    ↓        ↓    │     │    ↓        ↓    │     │    ↓        ↓    │
    │  :8080    :8082  │     │  :8080    :8082  │     │  :8080    :8082  │  Consul API Gateway
    │  HTTP     TCP    │     │  HTTP     TCP    │     │  HTTP     TCP    │  HTTP routing / TCP pass

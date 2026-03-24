@@ -11,7 +11,7 @@ set -euo pipefail
 
 echo "Re-evaluating system jobs..."
 NOMAD_ADDR="${NOMAD_ADDR:-http://127.0.0.1:4646}"
-SYSTEM_JOBS=$(curl -s "${NOMAD_ADDR}/v1/jobs?type=system" | jq -r '.[].ID')
+SYSTEM_JOBS=$(curl -s "${NOMAD_ADDR}/v1/jobs" | jq -r '.[] | select(.Type == "system") | .ID')
 
 if [[ -z "$SYSTEM_JOBS" ]]; then
     echo "No system jobs found"

@@ -314,6 +314,7 @@ if [[ "$NOMAD_MGMT_TOKEN" != "<already-bootstrapped>" ]]; then
     echo "  To configure manually, run on a cluster node:"
     echo "    CONSUL_HTTP_TOKEN=<mgmt> NOMAD_TOKEN=<mgmt> nomad setup consul -y -jwks-url http://127.0.0.1:4646/.well-known/jwks.json"
     echo "    CONSUL_HTTP_TOKEN=<mgmt> consul acl binding-rule create -method nomad-workloads -bind-type templated-policy -bind-name builtin/api-gateway -bind-vars 'Name=\${value.nomad_job_id}' -selector '\"nomad_service\" not in value and value.nomad_job_id==\"api-gateway\"'"
+    echo "    CONSUL_HTTP_TOKEN=<mgmt> consul acl binding-rule create -method nomad-workloads -bind-type role -bind-name 'nomad-\${value.nomad_namespace}-tasks' -selector '\"nomad_service\" in value' -description 'Grant agent:read to Connect proxy workloads'"
   else
     # Create the 'nomad-workloads' Consul JWT auth method and default binding rules (idempotent)
     echo "  Running nomad setup consul..."

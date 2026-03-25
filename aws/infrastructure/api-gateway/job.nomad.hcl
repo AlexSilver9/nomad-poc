@@ -71,7 +71,7 @@ job "api-gateway" {
         aud         = ["consul.io"]
         ttl         = "1h"
         env         = true         # Exposes JWT as NOMAD_TOKEN_consul_api_gateway env var
-        change_mode = "restart"    # Prestart task exits immediately; restart on rotation is a no-op
+        change_mode = "noop"       # Prestart task exits after setup; token rotation must not attempt a restart
       }
 
       config {

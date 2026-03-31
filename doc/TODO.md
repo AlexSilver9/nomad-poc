@@ -51,42 +51,51 @@
     - Service Definitions
 - 3-Node Cluster bilden
 - Update SETUP.md + SERVICES.md
-
 - Zugriff Container Definitionen
 - api-gateway statt ingress-gateway
 - SSL -> ALB -> Nginx SSL -> Payara SSL hostname based routing
 - Nomad Administration Menü wenn ACLS aktiv sind -> Token Revoke per UI
+- ALB specs
+- Reserve resources for OS/system
+- Reserve resources for Nginx + API-Gateway
+- Onboarding 3 neue Nodees als Client (1 als isolated: 'sls-ssh-sync')
+- CPU & Memory Settings / Limits erarbeiten
+
+- run.sh + stop.sh 
+- server heartbeat_grace -> 60sec ?
+- ServiceName RFC 1123
+- Services übernehmen:
+    - Phonebook Service
+    - service.customers     curl -k -H "Host: service.customers.mitel.com" https://albtest.appservices.mitel.com
+    - service.assets        curl -k -H "Host: service.assets.mitel.com" https://albtest.appservices.mitel.com
+    - service.swa           curl -k -H "Host: service.swa.mitel.com" https://albtest.appservices.mitel.com
+- Service Healthcheck auf na/ping, rest/ping status code 200
+- set_real_ip header aus nginx
+- Nginx Healthcheck
 
 # TODO:
 sudo git pull origin master --rebase
-- CPU & Memory Settings / Limits erarbeiten
-- Nginx Configs aus Image übernehmen oder Nginx Image übernehmen
-- Make AWS prerequisites configurable: VPC, subnets, security groups, key pair name, instance type, region
-    - Currently hardcoded in create_instances.sh, create_target_group.sh, create_alb.sh
-    - Move to a config file (e.g. aws/config.sh) sourced by all cluster scripts
-- Replace GitHub raw file downloads with `git clone`
-    - setup_cluster.sh currently downloads individual files via wget from raw.githubusercontent.com
-    - Should clone the repo on the node instead, then reference files locally
-    - Avoids broken downloads when files are added/moved and simplifies the download logic
-
-
-# In client config — reserve resources for OS/system, not available to jobs
-reserved {
-  cpu            = 500   # MHz kept off the table
-  memory         = 1024  # MB
-  disk           = 1024  # MB
-}
 
 - ACLs aktiv setzen
+- Nginx Configs aus Image übernehmen oder Nginx Image übernehmen (`infrastructure/nginx-rewrite/config`)
+    - Service-spezifische configs werden im Job künftig in die Alloc gemappt
+    - TLSv1.2 + TLSv1.3 + Cipher Suites zentralisieren und aus den server blocks rausnehmen (eigenes Template)
+- Reserve resources for Envoy Sidecar
+- Revisit CPU and Memory Settings for the injected Envoy sidecar proxy
+
+- Nomad bin packing: memory von Docker Images nehmen   
+
 - Scripts Branches
-    - main (prod)
+    - master (prod)
     - staging (6 Nodes)
     - dev (1 Node)
 
-- Update CheatSheet
+- Prometheus / Grafana Recherche
+
 - Document Consul ACL Reset: https://developer.hashicorp.com/consul/docs/secure/acl/reset
 - `consul/policies/agent.policy.hcl`
     - scope agent tokens to their own node name using `node "hostname" { policy = "write" }`
+- Update CheatSheet
 - Nomad Binary Update
     - https://developer.hashicorp.com/nomad/docs/upgrade
     - https://developer.hashicorp.com/nomad/docs/upgrade/upgrade-specific
@@ -116,3 +125,12 @@ reserved {
 
 # OPTIONAL:
 - Observability (Prometheus)
+
+# POC ONLY
+- Make AWS prerequisites configurable: VPC, subnets, security groups, key pair name, instance type, region
+    - Currently hardcoded in create_instances.sh, create_target_group.sh, create_alb.sh
+    - Move to a config file (e.g. aws/config.sh) sourced by all cluster scripts
+- Replace GitHub raw file downloads with `git clone`
+    - setup_cluster.sh currently downloads individual files via wget from raw.githubusercontent.com
+    - Should clone the repo on the node instead, then reference files locally
+    - Avoids broken downloads when files are added/moved and simplifies the download logic

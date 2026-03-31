@@ -69,6 +69,11 @@ nomad logs -f <allocation-id> <task-name>
 nomad alloc logs -f <allocation-id>
 # or when alloc has multiple tasks
 nomad alloc logs -f <allocation-id> <task-name>
+
+# stderr logs
+nomad alloc logs -stderr <allocation-id>
+# or when alloc has multiple tasks
+nomad alloc logs -stderr <allocation-id>  <task-name>
 ```
 
 Stop job:

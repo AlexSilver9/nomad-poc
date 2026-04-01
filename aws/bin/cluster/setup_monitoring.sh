@@ -17,7 +17,6 @@ ACL_DIR="$SCRIPT_DIR/../../acl"
 SSH_KEY="${SSH_KEY:-$HOME/workspace/nomad/nomad-keypair.pem}"
 SSH_USER="ec2-user"
 SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o LogLevel=ERROR"
-REMOTE_HOME="/home/$SSH_USER"
 GITHUB_RAW_BASE="https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/api-gateway/aws"
 
 # Token output file (gitignored)
@@ -123,11 +122,11 @@ create_nomad_token() {
         log_info "ACL is enforced (got 403) — creating metrics-scraper token"
 
         # Download policy file from GitHub and apply
-        ssh_exec "$FIRST_NODE" "wget -qO metrics-scraper.policy.hcl $GITHUB_RAW_BASE/acl/nomad/policies/metrics-scraper.policy.hcl"
+        ssh_exec "$FIRST_NODE" "mkdir -p acl/nomad/policies && wget -qO acl/nomad/policies/metrics-scraper.policy.hcl $GITHUB_RAW_BASE/acl/nomad/policies/metrics-scraper.policy.hcl"
         ssh_exec "$FIRST_NODE" "nomad acl policy apply \
             -description 'Read-only policy for Prometheus metrics scraping' \
             metrics-scraper \
-            $REMOTE_HOME/metrics-scraper.policy.hcl"
+            acl/nomad/policies/metrics-scraper.policy.hcl"
         log_success "Policy 'metrics-scraper' applied"
 
         # Create token
@@ -155,13 +154,13 @@ create_nomad_token() {
 deploy_prometheus() {
     log_info "=== STEP 3: Deploying Prometheus ==="
 
-    ssh_exec "$FIRST_NODE" "wget -qO prometheus.nomad.hcl $GITHUB_RAW_BASE/infrastructure/prometheus/job.nomad.hcl"
+    ssh_exec "$FIRST_NODE" "mkdir -p infrastructure/prometheus && wget -qO infrastructure/prometheus/job.nomad.hcl $GITHUB_RAW_BASE/infrastructure/prometheus/job.nomad.hcl"
 
     local token_vars=""
     [[ -n "$NOMAD_SCRAPE_TOKEN"    ]] && token_vars="$token_vars -var=nomad_scrape_token=$NOMAD_SCRAPE_TOKEN"
     [[ -n "${CONSUL_HTTP_TOKEN:-}" ]] && token_vars="$token_vars -var=consul_token=$CONSUL_HTTP_TOKEN"
 
-    ssh_exec "$FIRST_NODE" "nomad job run $token_vars $REMOTE_HOME/prometheus.nomad.hcl"
+    ssh_exec "$FIRST_NODE" "nomad job run $token_vars infrastructure/prometheus/job.nomad.hcl"
     log_success "Prometheus job submitted"
 
     # Wait for Prometheus to be running
@@ -204,12 +203,12 @@ deploy_grafana() {
     local prometheus_addr="http://${prometheus_node_ip}:9090"
     log_info "Prometheus address for Grafana datasource: $prometheus_addr"
 
-    ssh_exec "$FIRST_NODE" "wget -qO grafana.nomad.hcl $GITHUB_RAW_BASE/infrastructure/grafana/job.nomad.hcl"
+    ssh_exec "$FIRST_NODE" "mkdir -p infrastructure/grafana && wget -qO infrastructure/grafana/job.nomad.hcl $GITHUB_RAW_BASE/infrastructure/grafana/job.nomad.hcl"
 
     ssh_exec "$FIRST_NODE" "nomad job run \
         -var=admin_password=$GRAFANA_ADMIN_PASSWORD \
         -var=prometheus_addr=$prometheus_addr \
-        $REMOTE_HOME/grafana.nomad.hcl"
+        infrastructure/grafana/job.nomad.hcl"
 
     log_success "Grafana job submitted"
 }

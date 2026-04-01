@@ -13,11 +13,12 @@ set -euo pipefail
 # Usage: ./setup_monitoring.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-INFRA_DIR="$SCRIPT_DIR/../../infrastructure"
 ACL_DIR="$SCRIPT_DIR/../../acl"
 SSH_KEY="${SSH_KEY:-$HOME/workspace/nomad/nomad-keypair.pem}"
 SSH_USER="ec2-user"
 SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o LogLevel=ERROR"
+REMOTE_HOME="/home/$SSH_USER"
+GITHUB_RAW_BASE="https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/api-gateway/aws"
 
 # Token output file (gitignored)
 MONITORING_TOKENS_FILE="$ACL_DIR/monitoring-tokens.txt"
@@ -34,6 +35,11 @@ log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 log_warn()    { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error()   { echo -e "${RED}[ERROR]${NC} $1"; }
 
+ssh_exec() {
+    local node="$1"; shift
+    ssh $SSH_OPTS -i "$SSH_KEY" "${SSH_USER}@${node}" "$@"
+}
+
 # Check prerequisites
 check_prerequisites() {
     log_info "Checking prerequisites..."
@@ -43,10 +49,8 @@ check_prerequisites() {
     [[ -f "$SSH_KEY"              ]] || { log_error "SSH key not found at $SSH_KEY"; exit 1; }
     # NOMAD_TOKEN and CONSUL_HTTP_TOKEN are optional — only required when ACL is enforced
 
-    command -v nomad  &>/dev/null || { log_error "nomad CLI required"; exit 1; }
-    command -v consul &>/dev/null || { log_error "consul CLI required"; exit 1; }
-    command -v aws    &>/dev/null || { log_error "aws-cli required";    exit 1; }
-    command -v jq     &>/dev/null || { log_error "jq required";         exit 1; }
+    command -v aws &>/dev/null || { log_error "aws-cli required"; exit 1; }
+    command -v jq  &>/dev/null || { log_error "jq required";      exit 1; }
 
     log_success "Prerequisites OK"
 }
@@ -79,11 +83,7 @@ discover_nodes() {
     log_success "Found ${#NODES[@]} node(s):"
     printf '  %s\n' "${NODES[@]}"
     export NODES
-}
-
-ssh_exec() {
-    local node="$1"; shift
-    ssh $SSH_OPTS -i "$SSH_KEY" "${SSH_USER}@${node}" "$@"
+    FIRST_NODE="${NODES[0]}"
 }
 
 #------------------------------------------------------------------------------
@@ -91,8 +91,6 @@ ssh_exec() {
 #------------------------------------------------------------------------------
 configure_nodes() {
     log_info "=== STEP 1: Configuring nodes (telemetry + host volumes) ==="
-
-    local GITHUB_RAW_BASE="https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/api-gateway/aws"
 
     for node in "${NODES[@]}"; do
         log_info "Configuring $node..."
@@ -102,9 +100,8 @@ configure_nodes() {
 
     # Wait for Nomad leader to be elected after rolling restarts
     log_info "Waiting for Nomad cluster to recover..."
-    local first_node="${NODES[0]}"
     for i in $(seq 1 15); do
-        if ssh_exec "$first_node" "nomad server members 2>/dev/null | grep -q alive"; then
+        if ssh_exec "$FIRST_NODE" "nomad server members | { grep -q alive || true; }"; then
             log_success "Nomad cluster healthy"
             break
         fi
@@ -125,19 +122,20 @@ create_nomad_token() {
     if [[ "$http_status" == "403" ]]; then
         log_info "ACL is enforced (got 403) — creating metrics-scraper token"
 
-        # Create policy
-        nomad acl policy apply \
-            -description "Read-only policy for Prometheus metrics scraping" \
+        # Download policy file from GitHub and apply
+        ssh_exec "$FIRST_NODE" "wget -qO metrics-scraper.policy.hcl $GITHUB_RAW_BASE/acl/nomad/policies/metrics-scraper.policy.hcl"
+        ssh_exec "$FIRST_NODE" "nomad acl policy apply \
+            -description 'Read-only policy for Prometheus metrics scraping' \
             metrics-scraper \
-            "$ACL_DIR/nomad/policies/metrics-scraper.policy.hcl"
+            $REMOTE_HOME/metrics-scraper.policy.hcl"
         log_success "Policy 'metrics-scraper' applied"
 
         # Create token
         local token_output
-        token_output=$(nomad acl token create \
-            -name="prometheus-metrics-scraper" \
+        token_output=$(ssh_exec "$FIRST_NODE" "nomad acl token create \
+            -name=prometheus-metrics-scraper \
             -policy=metrics-scraper \
-            -type=client)
+            -type=client")
 
         NOMAD_SCRAPE_TOKEN=$(echo "$token_output" | grep "^Secret ID" | awk '{print $4}')
         [[ -n "$NOMAD_SCRAPE_TOKEN" ]] || { log_error "Failed to extract Nomad scrape token"; exit 1; }
@@ -157,20 +155,21 @@ create_nomad_token() {
 deploy_prometheus() {
     log_info "=== STEP 3: Deploying Prometheus ==="
 
-    local token_vars=()
-    [[ -n "$NOMAD_SCRAPE_TOKEN"    ]] && token_vars+=(-var="nomad_scrape_token=$NOMAD_SCRAPE_TOKEN")
-    [[ -n "${CONSUL_HTTP_TOKEN:-}" ]] && token_vars+=(-var="consul_token=$CONSUL_HTTP_TOKEN")
+    ssh_exec "$FIRST_NODE" "wget -qO prometheus.nomad.hcl $GITHUB_RAW_BASE/infrastructure/prometheus/job.nomad.hcl"
 
-    nomad job run "${token_vars[@]}" "$INFRA_DIR/prometheus/job.nomad.hcl"
+    local token_vars=""
+    [[ -n "$NOMAD_SCRAPE_TOKEN"    ]] && token_vars="$token_vars -var=nomad_scrape_token=$NOMAD_SCRAPE_TOKEN"
+    [[ -n "${CONSUL_HTTP_TOKEN:-}" ]] && token_vars="$token_vars -var=consul_token=$CONSUL_HTTP_TOKEN"
 
+    ssh_exec "$FIRST_NODE" "nomad job run $token_vars $REMOTE_HOME/prometheus.nomad.hcl"
     log_success "Prometheus job submitted"
 
-    # Wait for prometheus to be running
+    # Wait for Prometheus to be running
     log_info "Waiting for Prometheus allocation to be running..."
     local attempt=1
     while [[ $attempt -le 20 ]]; do
         local status
-        status=$(nomad job status prometheus 2>/dev/null | grep -c "running" || echo "0")
+        status=$(ssh_exec "$FIRST_NODE" "nomad job status prometheus | { grep -c running || true; }")
         if [[ "$status" -gt 0 ]]; then
             log_success "Prometheus running"
             break
@@ -186,16 +185,17 @@ deploy_prometheus() {
 deploy_grafana() {
     log_info "=== STEP 4: Deploying Grafana ==="
 
-    # Resolve the node where Prometheus was allocated so Grafana can reach it.
-    # Prometheus uses host network on port 9090, so we need the node's IP.
+    # Resolve the node IP where Prometheus was allocated so Grafana can reach it.
+    # Prometheus uses host network on port 9090, so we need the node's private IP.
     local prometheus_node_ip
-    prometheus_node_ip=$(nomad job status -json prometheus \
-        | jq -r '[.Allocations[] | select(.ClientStatus == "running")][0].NodeID' \
+    prometheus_node_ip=$(ssh_exec "$FIRST_NODE" \
+        "nomad job status -json prometheus \
+        | jq -r '[.Allocations[] | select(.ClientStatus == \"running\")][0].NodeID' \
         | xargs nomad node status -json \
-        | jq -r '.Attributes["unique.network.ip-address"]')
+        | jq -r '.Attributes[\"unique.network.ip-address\"]'" || true)
 
     if [[ -z "$prometheus_node_ip" || "$prometheus_node_ip" == "null" ]]; then
-        log_warn "Could not resolve Prometheus node IP — using first node IP as fallback"
+        log_warn "Could not resolve Prometheus node IP — using first node private IP as fallback"
         prometheus_node_ip=$(aws ec2 describe-instances \
             | jq -r '.Reservations[].Instances[] | select(.State.Name == "running") | .PrivateIpAddress' \
             | head -1)
@@ -204,10 +204,12 @@ deploy_grafana() {
     local prometheus_addr="http://${prometheus_node_ip}:9090"
     log_info "Prometheus address for Grafana datasource: $prometheus_addr"
 
-    nomad job run \
-        -var="admin_password=$GRAFANA_ADMIN_PASSWORD" \
-        -var="prometheus_addr=$prometheus_addr" \
-        "$INFRA_DIR/grafana/job.nomad.hcl"
+    ssh_exec "$FIRST_NODE" "wget -qO grafana.nomad.hcl $GITHUB_RAW_BASE/infrastructure/grafana/job.nomad.hcl"
+
+    ssh_exec "$FIRST_NODE" "nomad job run \
+        -var=admin_password=$GRAFANA_ADMIN_PASSWORD \
+        -var=prometheus_addr=$prometheus_addr \
+        $REMOTE_HOME/grafana.nomad.hcl"
 
     log_success "Grafana job submitted"
 }
@@ -270,10 +272,10 @@ main() {
     echo "Next: import dashboard 10902 in Grafana"
     echo "  Grafana → Dashboards → Import → ID 10902"
     echo ""
-    echo "Check status:"
+    echo "Check status (SSH to a node first):"
     echo "  nomad job status prometheus"
     echo "  nomad job status grafana"
-    echo "  curl -s http://<node-ip>:9090/api/v1/targets | jq '.data.activeTargets[].health'"
+    echo "  curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets[].health'"
 }
 
 main "$@"

@@ -548,10 +548,25 @@ wait_and_test_alb() {
 }
 
 #------------------------------------------------------------------------------
-# STEP 11: Download additional scripts (not run automatically)
+# STEP 11: Set up monitoring (optional, requires GRAFANA_ADMIN_PASSWORD env var)
+#------------------------------------------------------------------------------
+setup_monitoring() {
+    if [[ -z "${GRAFANA_ADMIN_PASSWORD:-}" ]]; then
+        log_warn "=== STEP 11: Skipping monitoring setup (GRAFANA_ADMIN_PASSWORD not set) ==="
+        log_warn "Run bin/cluster/setup_monitoring.sh manually to add Prometheus + Grafana."
+        return
+    fi
+
+    log_info "=== STEP 11: Setting up monitoring ==="
+    "$SCRIPT_DIR/setup_monitoring.sh"
+    log_success "Monitoring deployed"
+}
+
+#------------------------------------------------------------------------------
+# STEP 12: Download additional scripts (not run automatically)
 #------------------------------------------------------------------------------
 download_additional_scripts() {
-    log_info "=== STEP 11: Downloading additional scripts ==="
+    log_info "=== STEP 12: Downloading additional scripts ==="
 
     local first_node="${NODES[0]}"
 
@@ -597,6 +612,7 @@ main() {
     test_internal_routing
     create_load_balancer
     wait_and_test_alb
+    setup_monitoring
     download_additional_scripts
 
     echo ""

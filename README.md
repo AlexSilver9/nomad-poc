@@ -37,6 +37,7 @@ Internet / ALB
 - **Consul API Gateway** — Envoy-based ingress, replaces the deprecated ingress gateway
 - **Regex URL rewrite** — nginx / Traefik rewrites URLs with capture groups before the API Gateway (e.g. `/download/abc123` → `/service/download.xhtml?token=abc123`)
 - **ACL** — Nomad + Consul ACL with role-based user tokens and Nomad Workload Identity (NWI)
+- **Monitoring** — opt-in Prometheus + Grafana; works with and without ACL
 - **Node isolation** — sensitive workloads on a dedicated node pool
 - **Two deployment targets** — AWS EC2 (`aws/`) and local Multipass VMs (`multipass/`)
 
@@ -135,6 +136,7 @@ For a full setup walkthrough, see [doc/SETUP.md](doc/SETUP.md).
 ### Operations
 | Document | Description |
 |---|---|
+| [MONITORING.md](doc/MONITORING.md) | Prometheus + Grafana monitoring setup |
 | [NODE_ISOLATION.md](doc/NODE_ISOLATION.md) | Sensitive node pool setup and usage |
 | [CANARY_TRAFFIC_ISOLATION.md](doc/CANARY_TRAFFIC_ISOLATION.md) | Canary deployments with traffic isolation |
 | [CHEATSHEET.md](doc/CHEATSHEET.md) | Nomad and Consul command reference |

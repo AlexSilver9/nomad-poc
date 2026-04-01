@@ -61,7 +61,8 @@ What it does, in order:
 | 8 | Smoke-tests internal routing via HTTP on port 8081 |
 | 9 | Creates ALB target group + load balancer |
 | 10 | Waits for ALB targets to be healthy, tests ALB endpoints |
-| 11 | Downloads additional operation scripts to the first node |
+| 11 | Deploys monitoring (Prometheus + Grafana) if `GRAFANA_ADMIN_PASSWORD` is set |
+| 12 | Downloads additional operation scripts to the first node |
 
 At the end, the script prints node DNS names, ALB DNS, and SSH commands.
 
@@ -139,6 +140,24 @@ open http://<node>:8500   # should prompt for a token
 ```
 
 For full ACL details and troubleshooting, see [ACL_IMPLEMENTATION.md](ACL_IMPLEMENTATION.md).
+
+---
+
+## Monitoring setup (optional)
+
+Prometheus + Grafana can be added to a running cluster at any time. Works with or without ACL.
+
+```bash
+export NOMAD_ADDR=http://<node>:4646
+export NOMAD_TOKEN=<management-token>
+export CONSUL_HTTP_ADDR=http://<node>:8500
+cd aws/bin/cluster
+./setup_monitoring.sh
+```
+
+To include monitoring in a fresh `setup_cluster.sh` run, set `GRAFANA_ADMIN_PASSWORD` before running it — monitoring is skipped if the variable is not set.
+
+See [MONITORING.md](MONITORING.md) for full details.
 
 ---
 
@@ -236,5 +255,6 @@ ssh -i ~/workspace/nomad/nomad-keypair.pem ec2-user@<NODE>
 | [NWI.md](NWI.md) | Nomad Workload Identity — how the API Gateway authenticates to Consul |
 | [ACL_IMPLEMENTATION.md](ACL_IMPLEMENTATION.md) | Full ACL bootstrap procedure and token structure |
 | [USER_TOKENS.md](USER_TOKENS.md) | Creating and managing personal operator tokens |
+| [MONITORING.md](MONITORING.md) | Prometheus + Grafana monitoring setup |
 | [CHEATSHEET.md](../doc/CHEATSHEET.md) | Common Nomad/Consul CLI commands |
 | [VAULT.md](VAULT.md) | Vault setup (optional) |

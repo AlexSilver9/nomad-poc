@@ -48,7 +48,7 @@ Nomad agent :4646/v1/metrics   (all 3 nodes)
 ### Prerequisites
 
 - Cluster is running (ACL enforced or not — both work)
-- `NOMAD_ADDR` and `NOMAD_TOKEN` set in your shell
+- `NOMAD_ADDR` set in your shell (`NOMAD_TOKEN` only needed when Nomad ACL is enforced)
 - `CONSUL_HTTP_ADDR` set in your shell (`CONSUL_HTTP_TOKEN` only needed when Consul ACL is enforced)
 
 ### Run

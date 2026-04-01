@@ -81,7 +81,7 @@ scrape_configs:
       # Replace the Consul-provided port with Nomad's HTTP port
       - source_labels: [__address__]
         regex: '(.*):.*'
-        replacement: '${1}:4646'
+        replacement: '$1:4646'
         target_label: __address__
       - source_labels: [__meta_consul_node]
         target_label: instance

@@ -31,8 +31,11 @@ client {
 }
 EOF
 
-# Create data directories on EFS
+# Create data directories on EFS.
+# Prometheus runs as nobody (UID 65534), Grafana as grafana (UID 472) inside their containers.
 sudo mkdir -p /data/prometheus /data/grafana
+sudo chown 65534:65534 /data/prometheus
+sudo chown 472:472     /data/grafana
 
 # Restart Nomad to pick up the new config files
 echo "Restarting Nomad..."

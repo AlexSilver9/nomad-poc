@@ -10,6 +10,18 @@ variable "consul_token" {
   default     = ""
 }
 
+variable "prometheus_admin_hash" {
+  type        = string
+  description = "bcrypt hash of the Prometheus admin password. Set by setup_monitoring.sh. Leave empty (default) to disable basic auth."
+  default     = ""
+}
+
+variable "prometheus_tech_hash" {
+  type        = string
+  description = "bcrypt hash of the shared Prometheus tech user password. Set by setup_monitoring.sh. Leave empty (default) to disable basic auth."
+  default     = ""
+}
+
 job "prometheus" {
   datacenters = ["dc1"]
   type        = "service"
@@ -18,10 +30,10 @@ job "prometheus" {
     count = 1
 
     network {
-      mode = "host"
+      mode = "bridge"
 
-      port "prometheus" {
-        static = 9090
+      port "http" {
+        to = 9090
       }
     }
 
@@ -31,17 +43,37 @@ job "prometheus" {
       read_only = false
     }
 
+    # Service block at group level — required for Consul Connect sidecar.
+    service {
+      name = "prometheus"
+      port = "http"
+
+      check {
+        type     = "http"
+        path     = "/-/healthy"
+        interval = "15s"
+        timeout  = "3s"
+      }
+
+      connect {
+        sidecar_service {
+          proxy {
+            local_service_port = 9090
+          }
+        }
+      }
+    }
+
     task "prometheus" {
       driver = "docker"
 
       config {
-        image        = "prom/prometheus:v3.2.1"
-        network_mode = "host"
+        image = "prom/prometheus:v3.2.1"
 
         args = [
           "--config.file=/local/prometheus.yml",
           "--storage.tsdb.path=/prometheus",
-          "--web.listen-address=0.0.0.0:9090",
+          "--web.config.file=/local/web.yml",
         ]
       }
 
@@ -53,6 +85,7 @@ job "prometheus" {
 
       # Generates prometheus.yml using Consul service discovery to find Nomad nodes.
       # Nomad agents register themselves in Consul as 'nomad' (servers) and 'nomad-client' (clients).
+      # Uses CONSUL_ADDR (node IP) instead of localhost — bridge mode containers cannot reach host loopback.
       # Auth blocks are omitted when tokens are empty (ACL not enforced).
       template {
         data = <<EOF
@@ -70,7 +103,7 @@ scrape_configs:
       credentials: {{ env "NOMAD_SCRAPE_TOKEN" }}
 {{ end }}
     consul_sd_configs:
-      - server: 'localhost:8500'
+      - server: '{{ env "CONSUL_ADDR" }}'
 {{ if env "CONSUL_HTTP_TOKEN" }}
         token: '{{ env "CONSUL_HTTP_TOKEN" }}'
 {{ end }}
@@ -91,26 +124,33 @@ EOF
         destination = "local/prometheus.yml"
       }
 
+      # Generates web.yml for Prometheus native basic auth.
+      # When hashes are empty the file has no users — Prometheus starts without auth.
+      template {
+        data = <<EOF
+basic_auth_users:
+{{ if env "PROMETHEUS_ADMIN_HASH" }}
+  admin: '{{ env "PROMETHEUS_ADMIN_HASH" }}'
+{{ end }}
+{{ if env "PROMETHEUS_TECH_HASH" }}
+  tech: '{{ env "PROMETHEUS_TECH_HASH" }}'
+{{ end }}
+EOF
+        destination = "local/web.yml"
+      }
+
       env {
-        NOMAD_SCRAPE_TOKEN = var.nomad_scrape_token
-        CONSUL_HTTP_TOKEN  = var.consul_token
+        # Node IP used for Consul SD — bridge mode containers cannot reach host loopback
+        CONSUL_ADDR           = "http://${attr.unique.network.ip-address}:8500"
+        NOMAD_SCRAPE_TOKEN    = var.nomad_scrape_token
+        CONSUL_HTTP_TOKEN     = var.consul_token
+        PROMETHEUS_ADMIN_HASH = var.prometheus_admin_hash
+        PROMETHEUS_TECH_HASH  = var.prometheus_tech_hash
       }
 
       resources {
         cpu    = 200
         memory = 256
-      }
-
-      service {
-        name = "prometheus"
-        port = "prometheus"
-
-        check {
-          type     = "http"
-          path     = "/-/healthy"
-          interval = "15s"
-          timeout  = "3s"
-        }
       }
     }
   }

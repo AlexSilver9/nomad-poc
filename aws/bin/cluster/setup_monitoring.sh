@@ -4,6 +4,11 @@ set -euo pipefail
 # Opt-in monitoring setup for an existing Nomad cluster.
 # Deploys Prometheus and Grafana as Nomad jobs.
 #
+# Idempotent: safe to re-run. Prometheus metrics data and Grafana dashboards persist on
+# EFS across re-deploys. Grafana users also persist — tech users are not re-created if
+# they already exist. Exception: the Grafana admin password is only set on first init;
+# re-running with a different password has no effect (change it via the Grafana UI/API).
+#
 # Prerequisites:
 #   - Cluster is running (ACL enforced or not — both work)
 #   - NOMAD_ADDR is set (NOMAD_TOKEN only needed when Nomad ACL is enforced)
@@ -19,8 +24,8 @@ SSH_USER="ec2-user"
 SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o LogLevel=ERROR"
 GITHUB_RAW_BASE="https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/api-gateway/aws"
 
-# Token output file (gitignored)
-MONITORING_TOKENS_FILE="$ACL_DIR/monitoring-tokens.txt"
+# Credentials output file (gitignored)
+MONITORING_TOKENS_FILE="$ACL_DIR/monitoring-credentials.txt"
 
 # Colors
 RED='\033[0;31m'
@@ -54,18 +59,32 @@ check_prerequisites() {
     log_success "Prerequisites OK"
 }
 
-# Prompt for Grafana admin password
-prompt_grafana_password() {
-    if [[ -n "${GRAFANA_ADMIN_PASSWORD:-}" ]]; then
-        log_info "Using GRAFANA_ADMIN_PASSWORD from environment"
+# Prompt for a password, accepting it from env or interactively
+prompt_password() {
+    local var_name="$1"
+    local prompt_text="$2"
+
+    if [[ -n "${!var_name:-}" ]]; then
+        log_info "Using $var_name from environment"
         return
     fi
 
     echo ""
-    read -rsp "Enter Grafana admin password: " GRAFANA_ADMIN_PASSWORD
+    read -rsp "$prompt_text: " value
     echo ""
-    [[ -n "$GRAFANA_ADMIN_PASSWORD" ]] || { log_error "Password cannot be empty"; exit 1; }
-    export GRAFANA_ADMIN_PASSWORD
+    [[ -n "$value" ]] || { log_error "Password cannot be empty"; exit 1; }
+    export "$var_name"="$value"
+}
+
+# Prompt for all passwords
+prompt_passwords() {
+    log_info "=== Passwords ==="
+    prompt_password GRAFANA_ADMIN_PASSWORD       "Enter Grafana admin password"
+    prompt_password GRAFANA_TECH_ADMIN_PASSWORD  "Enter Grafana tech-admin password  (Admin role)"
+    prompt_password GRAFANA_TECH_EDITOR_PASSWORD "Enter Grafana tech-editor password (Editor role)"
+    prompt_password GRAFANA_TECH_VIEWER_PASSWORD "Enter Grafana tech-viewer password (Viewer role)"
+    prompt_password PROMETHEUS_ADMIN_PASSWORD    "Enter Prometheus admin password"
+    prompt_password PROMETHEUS_TECH_PASSWORD     "Enter Prometheus tech user password (shared by all tech users)"
 }
 
 # Discover running cluster nodes via AWS
@@ -149,16 +168,70 @@ create_nomad_token() {
 }
 
 #------------------------------------------------------------------------------
-# STEP 3: Deploy Prometheus
+# STEP 3: Apply Consul config entries for Prometheus and Grafana
+#------------------------------------------------------------------------------
+apply_consul_config() {
+    log_info "=== STEP 3: Applying Consul config entries ==="
+
+    # Order matters: service-defaults must be applied before routes.
+    local files=(
+        "infrastructure/prometheus/defaults.consul.hcl"
+        "infrastructure/grafana/defaults.consul.hcl"
+        "infrastructure/prometheus/intentions.consul.hcl"
+        "infrastructure/grafana/intentions.consul.hcl"
+        "infrastructure/prometheus/route.consul.hcl"
+        "infrastructure/grafana/route.consul.hcl"
+    )
+
+    for file in "${files[@]}"; do
+        local dir
+        dir=$(dirname "$file")
+        ssh_exec "$FIRST_NODE" "mkdir -p $dir && wget -qO $file $GITHUB_RAW_BASE/$file"
+        ssh_exec "$FIRST_NODE" "consul config write $file"
+        log_info "Applied $file"
+    done
+
+    log_success "Consul config entries applied"
+}
+
+#------------------------------------------------------------------------------
+# STEP 4: Generate bcrypt hashes for Prometheus basic auth
+#------------------------------------------------------------------------------
+generate_bcrypt_hashes() {
+    log_info "=== STEP 4: Generating Prometheus bcrypt hashes ==="
+
+    # Install bcrypt on the node if not already available
+    ssh_exec "$FIRST_NODE" "pip3 install --quiet bcrypt"
+
+    bcrypt_hash() {
+        local password="$1"
+        ssh_exec "$FIRST_NODE" "python3 -c \
+            \"import bcrypt; print(bcrypt.hashpw(b'${password}', bcrypt.gensalt(rounds=12)).decode())\""
+    }
+
+    PROMETHEUS_ADMIN_HASH=$(bcrypt_hash "$PROMETHEUS_ADMIN_PASSWORD")
+    PROMETHEUS_TECH_HASH=$(bcrypt_hash "$PROMETHEUS_TECH_PASSWORD")
+
+    [[ -n "$PROMETHEUS_ADMIN_HASH" ]] || { log_error "Failed to generate admin bcrypt hash"; exit 1; }
+    [[ -n "$PROMETHEUS_TECH_HASH"  ]] || { log_error "Failed to generate tech bcrypt hash";  exit 1; }
+
+    log_success "Bcrypt hashes generated"
+    export PROMETHEUS_ADMIN_HASH PROMETHEUS_TECH_HASH
+}
+
+#------------------------------------------------------------------------------
+# STEP 5: Deploy Prometheus
 #------------------------------------------------------------------------------
 deploy_prometheus() {
-    log_info "=== STEP 3: Deploying Prometheus ==="
+    log_info "=== STEP 5: Deploying Prometheus ==="
 
     ssh_exec "$FIRST_NODE" "mkdir -p infrastructure/prometheus && wget -qO infrastructure/prometheus/job.nomad.hcl $GITHUB_RAW_BASE/infrastructure/prometheus/job.nomad.hcl"
 
     local token_vars=""
-    [[ -n "$NOMAD_SCRAPE_TOKEN"    ]] && token_vars="$token_vars -var=nomad_scrape_token=$NOMAD_SCRAPE_TOKEN"
-    [[ -n "${CONSUL_HTTP_TOKEN:-}" ]] && token_vars="$token_vars -var=consul_token=$CONSUL_HTTP_TOKEN"
+    [[ -n "$NOMAD_SCRAPE_TOKEN"      ]] && token_vars="$token_vars -var=nomad_scrape_token=$NOMAD_SCRAPE_TOKEN"
+    [[ -n "${CONSUL_HTTP_TOKEN:-}"   ]] && token_vars="$token_vars -var=consul_token=$CONSUL_HTTP_TOKEN"
+    [[ -n "$PROMETHEUS_ADMIN_HASH"   ]] && token_vars="$token_vars -var=prometheus_admin_hash=$PROMETHEUS_ADMIN_HASH"
+    [[ -n "$PROMETHEUS_TECH_HASH"    ]] && token_vars="$token_vars -var=prometheus_tech_hash=$PROMETHEUS_TECH_HASH"
 
     ssh_exec "$FIRST_NODE" "nomad job run $token_vars infrastructure/prometheus/job.nomad.hcl"
     log_success "Prometheus job submitted"
@@ -179,60 +252,126 @@ deploy_prometheus() {
 }
 
 #------------------------------------------------------------------------------
-# STEP 4: Deploy Grafana
+# STEP 6: Deploy Grafana
 #------------------------------------------------------------------------------
 deploy_grafana() {
-    log_info "=== STEP 4: Deploying Grafana ==="
+    log_info "=== STEP 6: Deploying Grafana ==="
 
-    # Resolve the node IP where Prometheus was allocated so Grafana can reach it.
-    # Prometheus uses host network on port 9090, so we need the node's private IP.
-    local prometheus_node_ip
-    prometheus_node_ip=$(ssh_exec "$FIRST_NODE" \
-        "nomad job status -json prometheus \
-        | jq -r '[.Allocations[] | select(.ClientStatus == \"running\")][0].NodeID' \
-        | xargs nomad node status -json \
-        | jq -r '.Attributes[\"unique.network.ip-address\"]'" || true)
-
-    if [[ -z "$prometheus_node_ip" || "$prometheus_node_ip" == "null" ]]; then
-        log_warn "Could not resolve Prometheus node IP — using first node private IP as fallback"
-        prometheus_node_ip=$(aws ec2 describe-instances \
-            | jq -r '.Reservations[].Instances[] | select(.State.Name == "running") | .PrivateIpAddress' \
-            | head -1)
-    fi
-
-    local prometheus_addr="http://${prometheus_node_ip}:9090"
-    log_info "Prometheus address for Grafana datasource: $prometheus_addr"
+    # Grafana reaches Prometheus via its Connect sidecar upstream (localhost:9091).
 
     ssh_exec "$FIRST_NODE" "mkdir -p infrastructure/grafana && wget -qO infrastructure/grafana/job.nomad.hcl $GITHUB_RAW_BASE/infrastructure/grafana/job.nomad.hcl"
 
     ssh_exec "$FIRST_NODE" "nomad job run \
         -var=admin_password=$GRAFANA_ADMIN_PASSWORD \
-        -var=prometheus_addr=$prometheus_addr \
+        -var=grafana_tech_admin_password=$GRAFANA_TECH_ADMIN_PASSWORD \
+        -var=grafana_tech_editor_password=$GRAFANA_TECH_EDITOR_PASSWORD \
+        -var=grafana_tech_viewer_password=$GRAFANA_TECH_VIEWER_PASSWORD \
         infrastructure/grafana/job.nomad.hcl"
 
     log_success "Grafana job submitted"
+
+    # Wait for the Nomad allocation to reach running state
+    log_info "Waiting for Grafana allocation to be running..."
+    local attempt=1
+    while [[ $attempt -le 20 ]]; do
+        local status
+        status=$(ssh_exec "$FIRST_NODE" "nomad job status grafana | { grep -c running || true; }")
+        if [[ "$status" -gt 0 ]]; then
+            log_success "Grafana running"
+            break
+        fi
+        sleep 5
+        ((attempt++))
+    done
+
+    # In bridge mode the container port (3000) maps to a dynamic host port.
+    # Discover the actual port from Consul so we can reach the HTTP API.
+    log_info "Discovering Grafana host port via Consul..."
+    local grafana_port
+    grafana_port=$(ssh_exec "$FIRST_NODE" \
+        "curl -s http://localhost:8500/v1/catalog/service/grafana | jq -r '.[0].ServicePort'")
+    [[ -n "$grafana_port" && "$grafana_port" != "null" ]] \
+        || { log_error "Could not discover Grafana port from Consul"; exit 1; }
+    export GRAFANA_PORT="$grafana_port"
+    log_info "Grafana reachable on port $GRAFANA_PORT"
+
+    # Wait for Grafana HTTP to respond before user creation
+    log_info "Waiting for Grafana to accept HTTP requests..."
+    attempt=1
+    while [[ $attempt -le 20 ]]; do
+        local http_status
+        http_status=$(ssh_exec "$FIRST_NODE" \
+            "curl -s -o /dev/null -w '%{http_code}' http://localhost:${GRAFANA_PORT}/api/health")
+        if [[ "$http_status" == "200" ]]; then
+            log_success "Grafana HTTP ready"
+            break
+        fi
+        sleep 5
+        ((attempt++))
+    done
 }
 
 #------------------------------------------------------------------------------
-# STEP 5: Save token info (only when ACL tokens were created)
+# STEP 7: Create Grafana tech users via API
 #------------------------------------------------------------------------------
-save_tokens() {
-    if [[ -z "$NOMAD_SCRAPE_TOKEN" ]]; then
-        log_info "=== STEP 5: No tokens to save (ACL not enforced) ==="
-        return
-    fi
+create_grafana_users() {
+    log_info "=== STEP 7: Creating Grafana tech users ==="
 
-    log_info "=== STEP 5: Saving token info ==="
+    grafana_create_user() {
+        local login="$1"
+        local name="$2"
+        local role="$3"
+        local password="$4"
+
+        local response
+        response=$(ssh_exec "$FIRST_NODE" "curl -s -o /dev/null -w '%{http_code}' \
+            -X POST \
+            -H 'Content-Type: application/json' \
+            -u admin:${GRAFANA_ADMIN_PASSWORD} \
+            http://localhost:${GRAFANA_PORT}/api/admin/users \
+            -d '{\"login\":\"${login}\",\"name\":\"${name}\",\"password\":\"${password}\",\"role\":\"${role}\"}'")
+
+        if [[ "$response" == "200" ]]; then
+            log_success "User '$login' created (role: $role)"
+        else
+            log_warn "User '$login' may already exist or failed (HTTP $response)"
+        fi
+    }
+
+    grafana_create_user "tech-admin"  "Tech Admin"  "Admin"  "$GRAFANA_TECH_ADMIN_PASSWORD"
+    grafana_create_user "tech-editor" "Tech Editor" "Editor" "$GRAFANA_TECH_EDITOR_PASSWORD"
+    grafana_create_user "tech-viewer" "Tech Viewer" "Viewer" "$GRAFANA_TECH_VIEWER_PASSWORD"
+}
+
+#------------------------------------------------------------------------------
+# STEP 8: Save credentials
+#------------------------------------------------------------------------------
+save_credentials() {
+    log_info "=== STEP 8: Saving credentials ==="
 
     mkdir -p "$ACL_DIR"
     cat > "$MONITORING_TOKENS_FILE" <<EOF
-# Monitoring tokens — generated by setup_monitoring.sh
+# Monitoring credentials — generated by setup_monitoring.sh
 # DO NOT COMMIT — this file is gitignored
 
-NOMAD_SCRAPE_TOKEN=$NOMAD_SCRAPE_TOKEN
+# Prometheus
+PROMETHEUS_ADMIN_PASSWORD=$PROMETHEUS_ADMIN_PASSWORD
+PROMETHEUS_TECH_PASSWORD=$PROMETHEUS_TECH_PASSWORD
+
+# Grafana
+GRAFANA_ADMIN_PASSWORD=$GRAFANA_ADMIN_PASSWORD
+GRAFANA_TECH_ADMIN_PASSWORD=$GRAFANA_TECH_ADMIN_PASSWORD
+GRAFANA_TECH_EDITOR_PASSWORD=$GRAFANA_TECH_EDITOR_PASSWORD
+GRAFANA_TECH_VIEWER_PASSWORD=$GRAFANA_TECH_VIEWER_PASSWORD
 EOF
 
-    log_success "Tokens saved to $MONITORING_TOKENS_FILE"
+    if [[ -n "$NOMAD_SCRAPE_TOKEN" ]]; then
+        echo "" >> "$MONITORING_TOKENS_FILE"
+        echo "# Nomad ACL" >> "$MONITORING_TOKENS_FILE"
+        echo "NOMAD_SCRAPE_TOKEN=$NOMAD_SCRAPE_TOKEN" >> "$MONITORING_TOKENS_FILE"
+    fi
+
+    log_success "Credentials saved to $MONITORING_TOKENS_FILE"
 }
 
 #------------------------------------------------------------------------------
@@ -245,36 +384,35 @@ main() {
     echo ""
 
     check_prerequisites
-    prompt_grafana_password
+    prompt_passwords
     discover_nodes
     configure_nodes
     create_nomad_token
+    apply_consul_config
+    generate_bcrypt_hashes
     deploy_prometheus
     deploy_grafana
-    save_tokens
+    create_grafana_users
+    save_credentials
 
     echo ""
     echo "=============================================="
     log_success "Monitoring setup complete!"
     echo "=============================================="
     echo ""
-    echo "Grafana:"
-    for node in "${NODES[@]}"; do
-        echo "  http://${node}:3000  (login: admin / <password you entered>)"
-    done
+    echo "Access via API Gateway (hostname-based routing):"
+    echo "  Grafana:    http://<alb-or-ingress>  -H 'Host: grafana.example.com'"
+    echo "  Prometheus: http://<alb-or-ingress>  -H 'Host: prometheus.example.com'"
     echo ""
-    echo "Prometheus:"
-    for node in "${NODES[@]}"; do
-        echo "  http://${node}:9090"
-    done
-    echo ""
-    echo "Next: import dashboard 10902 in Grafana"
-    echo "  Grafana → Dashboards → Import → ID 10902"
+    echo "  Grafana users: admin, tech-admin (Admin), tech-editor (Editor), tech-viewer (Viewer)"
+    echo "  Prometheus users: admin, tech"
     echo ""
     echo "Check status (SSH to a node first):"
     echo "  nomad job status prometheus"
     echo "  nomad job status grafana"
-    echo "  curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets[].health'"
+    echo "  consul catalog services | grep -E 'prometheus|grafana'"
+    echo "  # Prometheus port (bridge mode — dynamic): curl -s http://localhost:8500/v1/catalog/service/prometheus | jq '.[0].ServicePort'"
+    echo "  curl -s -u admin:<password> http://localhost:<port>/api/v1/targets | jq '.data.activeTargets[].health'"
 }
 
 main "$@"

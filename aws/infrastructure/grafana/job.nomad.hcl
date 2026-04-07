@@ -3,9 +3,22 @@ variable "admin_password" {
   description = "Grafana admin password"
 }
 
-variable "prometheus_addr" {
+variable "grafana_tech_admin_password" {
   type        = string
-  description = "Prometheus address reachable from within the cluster, e.g. http://<node-ip>:9090"
+  description = "Password for the tech-admin user (Admin role). Set by setup_monitoring.sh. Leave empty (default) to skip user creation."
+  default     = ""
+}
+
+variable "grafana_tech_editor_password" {
+  type        = string
+  description = "Password for the tech-editor user (Editor role). Set by setup_monitoring.sh. Leave empty (default) to skip user creation."
+  default     = ""
+}
+
+variable "grafana_tech_viewer_password" {
+  type        = string
+  description = "Password for the tech-viewer user (Viewer role). Set by setup_monitoring.sh. Leave empty (default) to skip user creation."
+  default     = ""
 }
 
 job "grafana" {
@@ -16,10 +29,10 @@ job "grafana" {
     count = 1
 
     network {
-      mode = "host"
+      mode = "bridge"
 
-      port "grafana" {
-        static = 3000
+      port "http" {
+        to = 3000
       }
     }
 
@@ -29,12 +42,39 @@ job "grafana" {
       read_only = false
     }
 
+    # Service block at group level — required for Consul Connect sidecar.
+    # Declares an upstream to Prometheus so Grafana can reach it at localhost:9091
+    # regardless of which node Prometheus is scheduled on.
+    service {
+      name = "grafana"
+      port = "http"
+
+      check {
+        type     = "http"
+        path     = "/api/health"
+        interval = "15s"
+        timeout  = "3s"
+      }
+
+      connect {
+        sidecar_service {
+          proxy {
+            local_service_port = 3000
+
+            upstreams {
+              destination_name = "prometheus"
+              local_bind_port  = 9091
+            }
+          }
+        }
+      }
+    }
+
     task "grafana" {
       driver = "docker"
 
       config {
-        image        = "grafana/grafana:11.6.0"
-        network_mode = "host"
+        image = "grafana/grafana:11.6.0"
 
         volumes = [
           "local/provisioning/datasources:/etc/grafana/provisioning/datasources:ro",
@@ -48,13 +88,15 @@ job "grafana" {
       }
 
       # Provisions Prometheus as the default datasource at startup.
+      # Uses localhost:9091 — the sidecar upstream port — so Grafana always reaches
+      # Prometheus via the service mesh regardless of which node it runs on.
       template {
         data = <<EOF
 apiVersion: 1
 datasources:
   - name: Prometheus
     type: prometheus
-    url: {{ env "PROMETHEUS_ADDR" }}
+    url: http://localhost:9091
     isDefault: true
     editable: false
 EOF
@@ -66,24 +108,18 @@ EOF
         GF_AUTH_ANONYMOUS_ENABLED  = "false"
         GF_SECURITY_ADMIN_PASSWORD = var.admin_password
         GF_PATHS_PROVISIONING      = "/etc/grafana/provisioning"
-        PROMETHEUS_ADDR            = var.prometheus_addr
+
+        # Tech user passwords — used by setup_monitoring.sh to create users via the
+        # Grafana HTTP API after startup. Grafana OSS does not support user provisioning
+        # via config files; users must be created via API.
+        GRAFANA_TECH_ADMIN_PASSWORD  = var.grafana_tech_admin_password
+        GRAFANA_TECH_EDITOR_PASSWORD = var.grafana_tech_editor_password
+        GRAFANA_TECH_VIEWER_PASSWORD = var.grafana_tech_viewer_password
       }
 
       resources {
         cpu    = 200
         memory = 256
-      }
-
-      service {
-        name = "grafana"
-        port = "grafana"
-
-        check {
-          type     = "http"
-          path     = "/api/health"
-          interval = "15s"
-          timeout  = "3s"
-        }
       }
     }
   }

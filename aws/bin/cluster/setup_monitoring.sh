@@ -51,10 +51,30 @@ check_prerequisites() {
     log_info "Checking prerequisites..."
 
     [[ -f "$SSH_KEY" ]] || { log_error "SSH key not found at $SSH_KEY"; exit 1; }
-    # NOMAD_TOKEN and CONSUL_HTTP_TOKEN are optional — only required when ACL is enforced
 
     command -v aws &>/dev/null || { log_error "aws-cli required"; exit 1; }
     command -v jq  &>/dev/null || { log_error "jq required";      exit 1; }
+
+    # Probe ACL state from the first node and require tokens if enforced.
+    local nomad_status consul_status
+    nomad_status=$(ssh_exec "$FIRST_NODE" \
+        "curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 http://localhost:4646/v1/jobs")
+    consul_status=$(ssh_exec "$FIRST_NODE" \
+        "curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 http://localhost:8500/v1/catalog/services")
+
+    if [[ "$nomad_status" == "403" ]]; then
+        [[ -n "${NOMAD_TOKEN:-}" ]] || { log_error "Nomad ACL is enforced — NOMAD_TOKEN must be set"; exit 1; }
+        log_info "Nomad ACL enforced — token provided"
+    else
+        log_info "Nomad ACL not enforced"
+    fi
+
+    if [[ "$consul_status" == "403" ]]; then
+        [[ -n "${CONSUL_HTTP_TOKEN:-}" ]] || { log_error "Consul ACL is enforced — CONSUL_HTTP_TOKEN must be set"; exit 1; }
+        log_info "Consul ACL enforced — token provided"
+    else
+        log_info "Consul ACL not enforced"
+    fi
 
     log_success "Prerequisites OK"
 }
@@ -339,9 +359,9 @@ main() {
     echo "=============================================="
     echo ""
 
+    discover_nodes
     check_prerequisites
     prompt_passwords
-    discover_nodes
     configure_nodes
     apply_consul_config
     deploy_prometheus

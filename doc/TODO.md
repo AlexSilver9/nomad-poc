@@ -76,12 +76,15 @@
 # TODO:
 sudo git pull origin master --rebase
 
+- Service ports as in docker (docuemnted in nginx or api-gateway somwehere)
 - ACLs aktiv setzen
 - Nginx Configs aus Image übernehmen oder Nginx Image übernehmen (`infrastructure/nginx-rewrite/config`)
     - Service-spezifische configs werden im Job künftig in die Alloc gemappt
     - TLSv1.2 + TLSv1.3 + Cipher Suites zentralisieren und aus den server blocks rausnehmen (eigenes Template)
 - Reserve resources for Envoy Sidecar
 - Revisit CPU and Memory Settings for the injected Envoy sidecar proxy
+
+- Services von Docker übersetzen in HCL, aber nicht deployen
 
 - Nomad bin packing: memory von Docker Images nehmen   
 
@@ -134,3 +137,12 @@ sudo git pull origin master --rebase
     - setup_cluster.sh currently downloads individual files via wget from raw.githubusercontent.com
     - Should clone the repo on the node instead, then reference files locally
     - Avoids broken downloads when files are added/moved and simplifies the download logic
+- Merge API-Gateway to main
+
+
+Prometheus / Grafana
+- User Managerment (admin + sevice oder anonym account "monitoring" mit nur lese  berechtigung (kein import kein panel change)
+- /data/container/prometheus
+- /data/container/grafana
+- 1 Woche Daten sammeln
+- 15 sec Scrape

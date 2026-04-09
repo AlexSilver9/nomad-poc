@@ -73,6 +73,7 @@ job "prometheus" {
         args = [
           "--config.file=/local/prometheus.yml",
           "--storage.tsdb.path=/prometheus",
+          "--storage.tsdb.retention.time=7d",
           "--web.config.file=/local/web.yml",
         ]
       }

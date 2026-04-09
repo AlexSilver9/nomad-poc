@@ -59,8 +59,10 @@ check_prerequisites() {
     local nomad_status consul_status
     nomad_status=$(ssh_exec "$FIRST_NODE" \
         "curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 http://localhost:4646/v1/jobs")
+    # Use a write-protected endpoint — reads may be allowed even when ACL is enforced.
+    # PUT /v1/acl/token requires acl:write, which is always protected when ACL is enabled.
     consul_status=$(ssh_exec "$FIRST_NODE" \
-        "curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 http://localhost:8500/v1/catalog/services")
+        "curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 -X PUT http://localhost:8500/v1/acl/token")
 
     if [[ "$nomad_status" == "403" ]]; then
         [[ -n "${NOMAD_TOKEN:-}" ]] || { log_error "Nomad ACL is enforced — NOMAD_TOKEN must be set"; exit 1; }

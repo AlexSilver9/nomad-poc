@@ -133,9 +133,12 @@ configure_nodes() {
 create_nomad_token() {
     log_info "=== STEP 2: Detecting ACL mode ==="
 
-    # Probe the metrics endpoint — 403 means ACL is enforcing deny
+    # Probe the metrics endpoint from the node — 403 means ACL is enforcing deny.
+    # Run via SSH so the probe always works regardless of whether port 4646 is
+    # open to the local machine in the security group.
     local http_status
-    http_status=$(curl -s -o /dev/null -w "%{http_code}" "$NOMAD_ADDR/v1/metrics?format=prometheus")
+    http_status=$(ssh_exec "$FIRST_NODE" \
+        "curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 http://localhost:4646/v1/metrics?format=prometheus")
 
     if [[ "$http_status" == "403" ]]; then
         log_info "ACL is enforced (got 403) — creating metrics-scraper token"

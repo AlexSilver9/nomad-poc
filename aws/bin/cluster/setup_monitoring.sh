@@ -6,8 +6,9 @@ set -euo pipefail
 #
 # Idempotent: safe to re-run. Prometheus metrics data and Grafana dashboards persist on
 # EFS across re-deploys. Grafana users also persist — tech users are not re-created if
-# they already exist. Exception: the Grafana admin password is only set on first init;
-# re-running with a different password has no effect (change it via the Grafana UI/API).
+# they already exist. The Grafana admin password is only set on first init; re-running
+# with a different password has no effect (change it via the Grafana UI/API).
+# Prometheus has no basic auth configured — access is enforced by Consul Connect intentions.
 #
 # Prerequisites:
 #   - Cluster is running (ACL enforced or not — both work)
@@ -83,8 +84,6 @@ prompt_passwords() {
     prompt_password GRAFANA_TECH_ADMIN_PASSWORD  "Enter Grafana tech-admin password  (Admin role)"
     prompt_password GRAFANA_TECH_EDITOR_PASSWORD "Enter Grafana tech-editor password (Editor role)"
     prompt_password GRAFANA_TECH_VIEWER_PASSWORD "Enter Grafana tech-viewer password (Viewer role)"
-    prompt_password PROMETHEUS_ADMIN_PASSWORD    "Enter Prometheus admin password"
-    prompt_password PROMETHEUS_TECH_PASSWORD     "Enter Prometheus tech user password (shared by all tech users)"
 }
 
 # Discover running cluster nodes via AWS
@@ -198,41 +197,10 @@ apply_consul_config() {
 }
 
 #------------------------------------------------------------------------------
-# STEP 4: Generate bcrypt hashes for Prometheus basic auth
-#------------------------------------------------------------------------------
-generate_bcrypt_hashes() {
-    log_info "=== STEP 4: Generating Prometheus bcrypt hashes ==="
-
-    ssh_exec "$FIRST_NODE" "pip3 install --quiet bcrypt"
-
-    # Passwords are base64-encoded locally so they can be safely embedded in the
-    # heredoc without shell quoting issues (base64 output is [A-Za-z0-9+/=] only).
-    # Hashes are written directly to a var file on the remote node and never returned
-    # as local shell variables — bcrypt hashes contain $ separators that get mangled
-    # by shell variable expansion if passed through command-line -var= arguments.
-    local admin_b64 tech_b64
-    admin_b64=$(printf '%s' "$PROMETHEUS_ADMIN_PASSWORD" | base64)
-    tech_b64=$(printf '%s'  "$PROMETHEUS_TECH_PASSWORD"  | base64)
-
-    ssh $SSH_OPTS -i "$SSH_KEY" "${SSH_USER}@${FIRST_NODE}" python3 <<PYEOF
-import bcrypt, base64
-admin_pw   = base64.b64decode('${admin_b64}').decode()
-tech_pw    = base64.b64decode('${tech_b64}').decode()
-admin_hash = bcrypt.hashpw(admin_pw.encode(), bcrypt.gensalt(rounds=12)).decode()
-tech_hash  = bcrypt.hashpw(tech_pw.encode(),  bcrypt.gensalt(rounds=12)).decode()
-with open('/tmp/prometheus-vars.hcl', 'w') as f:
-    f.write('prometheus_admin_hash = "%s"\n' % admin_hash)
-    f.write('prometheus_tech_hash  = "%s"\n' % tech_hash)
-PYEOF
-
-    log_success "Bcrypt hashes written to /tmp/prometheus-vars.hcl on $FIRST_NODE"
-}
-
-#------------------------------------------------------------------------------
-# STEP 5: Deploy Prometheus
+# STEP 4: Deploy Prometheus
 #------------------------------------------------------------------------------
 deploy_prometheus() {
-    log_info "=== STEP 5: Deploying Prometheus ==="
+    log_info "=== STEP 4: Deploying Prometheus ==="
 
     ssh_exec "$FIRST_NODE" "mkdir -p infrastructure/prometheus && wget -qO infrastructure/prometheus/job.nomad.hcl $GITHUB_RAW_BASE/infrastructure/prometheus/job.nomad.hcl"
 
@@ -240,8 +208,7 @@ deploy_prometheus() {
     [[ -n "$NOMAD_SCRAPE_TOKEN"    ]] && token_vars="$token_vars -var=nomad_scrape_token=$NOMAD_SCRAPE_TOKEN"
     [[ -n "${CONSUL_HTTP_TOKEN:-}" ]] && token_vars="$token_vars -var=consul_token=$CONSUL_HTTP_TOKEN"
 
-    # Bcrypt hashes are in a var file (not -var= args) to avoid $ corruption — see generate_bcrypt_hashes
-    ssh_exec "$FIRST_NODE" "nomad job run $token_vars -var-file=/tmp/prometheus-vars.hcl infrastructure/prometheus/job.nomad.hcl"
+    ssh_exec "$FIRST_NODE" "nomad job run $token_vars infrastructure/prometheus/job.nomad.hcl"
     log_success "Prometheus job submitted"
 
     # Wait for Prometheus to be running
@@ -260,10 +227,10 @@ deploy_prometheus() {
 }
 
 #------------------------------------------------------------------------------
-# STEP 6: Deploy Grafana
+# STEP 5: Deploy Grafana
 #------------------------------------------------------------------------------
 deploy_grafana() {
-    log_info "=== STEP 6: Deploying Grafana ==="
+    log_info "=== STEP 5: Deploying Grafana ==="
 
     # Grafana reaches Prometheus via its Connect sidecar upstream (localhost:9091).
 
@@ -335,10 +302,10 @@ PYEOF
 }
 
 #------------------------------------------------------------------------------
-# STEP 7: Create Grafana tech users via API
+# STEP 6: Create Grafana tech users via API
 #------------------------------------------------------------------------------
 create_grafana_users() {
-    log_info "=== STEP 7: Creating Grafana tech users ==="
+    log_info "=== STEP 6: Creating Grafana tech users ==="
 
     # All passwords are base64-encoded to avoid shell expansion of $ over SSH.
     local admin_b64 tech_admin_b64 tech_editor_b64 tech_viewer_b64
@@ -378,19 +345,15 @@ PYEOF
 }
 
 #------------------------------------------------------------------------------
-# STEP 8: Save credentials
+# STEP 7: Save credentials
 #------------------------------------------------------------------------------
 save_credentials() {
-    log_info "=== STEP 8: Saving credentials ==="
+    log_info "=== STEP 7: Saving credentials ==="
 
     mkdir -p "$ACL_DIR"
     cat > "$MONITORING_TOKENS_FILE" <<EOF
 # Monitoring credentials — generated by setup_monitoring.sh
 # DO NOT COMMIT — this file is gitignored
-
-# Prometheus
-PROMETHEUS_ADMIN_PASSWORD=$PROMETHEUS_ADMIN_PASSWORD
-PROMETHEUS_TECH_PASSWORD=$PROMETHEUS_TECH_PASSWORD
 
 # Grafana
 GRAFANA_ADMIN_PASSWORD=$GRAFANA_ADMIN_PASSWORD
@@ -423,7 +386,6 @@ main() {
     configure_nodes
     create_nomad_token
     apply_consul_config
-    generate_bcrypt_hashes
     deploy_prometheus
     deploy_grafana
     create_grafana_users
@@ -439,7 +401,7 @@ main() {
     echo "  Prometheus: http://<alb-or-ingress>  -H 'Host: prometheus.example.com'"
     echo ""
     echo "  Grafana users: admin, tech-admin (Admin), tech-editor (Editor), tech-viewer (Viewer)"
-    echo "  Prometheus users: admin, tech"
+    echo "  Prometheus: no auth (access enforced by Consul Connect intentions)"
     echo ""
     echo "Check status (SSH to a node first):"
     echo "  nomad job status prometheus"

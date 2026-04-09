@@ -10,18 +10,6 @@ variable "consul_token" {
   default     = ""
 }
 
-variable "prometheus_admin_hash" {
-  type        = string
-  description = "bcrypt hash of the Prometheus admin password. Set by setup_monitoring.sh. Leave empty (default) to disable basic auth."
-  default     = ""
-}
-
-variable "prometheus_tech_hash" {
-  type        = string
-  description = "bcrypt hash of the shared Prometheus tech user password. Set by setup_monitoring.sh. Leave empty (default) to disable basic auth."
-  default     = ""
-}
-
 job "prometheus" {
   datacenters = ["dc1"]
   type        = "service"
@@ -44,6 +32,7 @@ job "prometheus" {
     }
 
     # Service block at group level — required for Consul Connect sidecar.
+    # No basic auth configured — access control is enforced by Consul Connect intentions.
     service {
       name = "prometheus"
       port = "http"
@@ -74,7 +63,6 @@ job "prometheus" {
           "--config.file=/local/prometheus.yml",
           "--storage.tsdb.path=/prometheus",
           "--storage.tsdb.retention.time=7d",
-          "--web.config.file=/local/web.yml",
         ]
       }
 
@@ -125,28 +113,11 @@ EOF
         destination = "local/prometheus.yml"
       }
 
-      # Generates web.yml for Prometheus native basic auth.
-      # When hashes are empty the file has no users — Prometheus starts without auth.
-      template {
-        data = <<EOF
-basic_auth_users:
-{{ if env "PROMETHEUS_ADMIN_HASH" }}
-  admin: '{{ env "PROMETHEUS_ADMIN_HASH" }}'
-{{ end }}
-{{ if env "PROMETHEUS_TECH_HASH" }}
-  tech: '{{ env "PROMETHEUS_TECH_HASH" }}'
-{{ end }}
-EOF
-        destination = "local/web.yml"
-      }
-
       env {
         # Node IP used for Consul SD — bridge mode containers cannot reach host loopback
-        CONSUL_ADDR           = "http://${attr.unique.network.ip-address}:8500"
-        NOMAD_SCRAPE_TOKEN    = var.nomad_scrape_token
-        CONSUL_HTTP_TOKEN     = var.consul_token
-        PROMETHEUS_ADMIN_HASH = var.prometheus_admin_hash
-        PROMETHEUS_TECH_HASH  = var.prometheus_tech_hash
+        CONSUL_ADDR       = "http://${attr.unique.network.ip-address}:8500"
+        NOMAD_SCRAPE_TOKEN = var.nomad_scrape_token
+        CONSUL_HTTP_TOKEN  = var.consul_token
       }
 
       resources {

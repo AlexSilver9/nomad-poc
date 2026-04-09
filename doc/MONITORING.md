@@ -107,12 +107,10 @@ curl -s http://localhost:8500/v1/catalog/service/prometheus | jq '.[0].ServicePo
 | `tech-editor` | Editor (can create dashboards, cannot delete others') | Set during `setup_monitoring.sh` |
 | `tech-viewer` | Viewer (read-only) | Set during `setup_monitoring.sh` |
 
-**Prometheus**
+**Prometheus**: no application-level authentication. Access control relies on two layers:
 
-| User | Password |
-|------|----------|
-| `admin` | Set during `setup_monitoring.sh` |
-| `tech` | Set during `setup_monitoring.sh` (shared by all tech users) |
+1. **Consul Connect intentions** — only the `api-gateway` and `grafana` sidecars are permitted to reach Prometheus through the service mesh (mTLS enforced by Envoy).
+2. **EC2 security group** — the security group must not expose the ephemeral port range Nomad allocates from. Anyone who can reach the dynamic host port directly (e.g. via SSH to the node) bypasses the mesh and has unauthenticated access. This is acceptable for internal infrastructure in a correctly locked-down security group.
 
 ---
 
@@ -131,10 +129,9 @@ Both Prometheus and Grafana mount their data directories from EFS-backed host vo
 
 Prometheus stores its TSDB (all scraped metrics + write-ahead log) at `/prometheus`, which is mounted from EFS. Restarts pick up exactly where they left off — no gap in metrics history.
 
-`prometheus.yml` and `web.yml` are Nomad templates regenerated fresh on every allocation start. This means:
+**Retention**: configured to **7 days** via `--storage.tsdb.retention.time=7d` in the job's `args` block ([aws/infrastructure/prometheus/job.nomad.hcl](../aws/infrastructure/prometheus/job.nomad.hcl)). Prometheus defaults to 15 days if not set. Change the value and redeploy to adjust.
 
-- **Basic auth users** (`admin`, `tech`) are defined by the bcrypt hashes passed as job variables. Changing them and rerunning `nomad job run` takes effect immediately on the next start — there is no "first-init only" caveat.
-- **Scrape config** changes also take effect on redeploy (or by sending a `SIGHUP` to the Prometheus process).
+`prometheus.yml` is a Nomad template regenerated fresh on every allocation start. Scrape config changes take effect on redeploy (or by sending a `SIGHUP` to the Prometheus process).
 
 ### Grafana user persistence
 

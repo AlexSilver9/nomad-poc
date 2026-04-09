@@ -13,9 +13,9 @@ set -euo pipefail
 #
 # Prerequisites:
 #   - Cluster is running (ACL enforced or not — both work)
-#   - NOMAD_ADDR is set
-#   - CONSUL_HTTP_ADDR is set (CONSUL_HTTP_TOKEN only needed when Consul ACL is enforced)
 #   - SSH_KEY points to the EC2 keypair (default: ~/workspace/nomad/nomad-keypair.pem)
+#   - NOMAD_TOKEN set if Nomad ACL is enforced
+#   - CONSUL_HTTP_TOKEN set if Consul ACL is enforced
 #
 # Usage: ./setup_monitoring.sh
 
@@ -50,9 +50,7 @@ ssh_exec() {
 check_prerequisites() {
     log_info "Checking prerequisites..."
 
-    [[ -n "${NOMAD_ADDR:-}"       ]] || { log_error "NOMAD_ADDR is not set (e.g. export NOMAD_ADDR=http://ec2-1-2-3-4.eu-central-1.compute.amazonaws.com:4646)";       exit 1; }
-    [[ -n "${CONSUL_HTTP_ADDR:-}" ]] || { log_error "CONSUL_HTTP_ADDR is not set (e.g. export CONSUL_HTTP_ADDR=http://ec2-1-2-3-4.eu-central-1.compute.amazonaws.com:8500)"; exit 1; }
-    [[ -f "$SSH_KEY"              ]] || { log_error "SSH key not found at $SSH_KEY"; exit 1; }
+    [[ -f "$SSH_KEY" ]] || { log_error "SSH key not found at $SSH_KEY"; exit 1; }
     # NOMAD_TOKEN and CONSUL_HTTP_TOKEN are optional — only required when ACL is enforced
 
     command -v aws &>/dev/null || { log_error "aws-cli required"; exit 1; }
@@ -120,7 +118,7 @@ configure_nodes() {
     # Wait for Nomad leader to be elected after rolling restarts
     log_info "Waiting for Nomad cluster to recover..."
     for i in $(seq 1 15); do
-        if ssh_exec "$FIRST_NODE" "nomad server members | { grep -q alive || true; }"; then
+        if ssh_exec "$FIRST_NODE" "NOMAD_TOKEN=${NOMAD_TOKEN:-} nomad server members | { grep -q alive || true; }"; then
             log_success "Nomad cluster healthy"
             break
         fi
@@ -148,7 +146,7 @@ apply_consul_config() {
         local dir
         dir=$(dirname "$file")
         ssh_exec "$FIRST_NODE" "mkdir -p $dir && wget -qO $file $GITHUB_RAW_BASE/$file"
-        ssh_exec "$FIRST_NODE" "consul config write $file"
+        ssh_exec "$FIRST_NODE" "CONSUL_HTTP_TOKEN=${CONSUL_HTTP_TOKEN:-} consul config write $file"
         log_info "Applied $file"
     done
 

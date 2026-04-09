@@ -185,7 +185,7 @@ deploy_prometheus() {
     local consul_var=""
     [[ -n "${CONSUL_HTTP_TOKEN:-}" ]] && consul_var="-var=consul_token=$CONSUL_HTTP_TOKEN"
 
-    ssh_exec "$FIRST_NODE" "nomad job run $consul_var infrastructure/prometheus/job.nomad.hcl"
+    ssh_exec "$FIRST_NODE" "NOMAD_TOKEN=${NOMAD_TOKEN:-} nomad job run $consul_var infrastructure/prometheus/job.nomad.hcl"
     log_success "Prometheus job submitted"
 
     # Wait for Prometheus to be running
@@ -193,7 +193,7 @@ deploy_prometheus() {
     local attempt=1
     while [[ $attempt -le 20 ]]; do
         local status
-        status=$(ssh_exec "$FIRST_NODE" "nomad job status prometheus | { grep -c running || true; }")
+        status=$(ssh_exec "$FIRST_NODE" "NOMAD_TOKEN=${NOMAD_TOKEN:-} nomad job status prometheus | { grep -c running || true; }")
         if [[ "$status" -gt 0 ]]; then
             log_success "Prometheus running"
             break
@@ -233,7 +233,7 @@ with open('/tmp/grafana-vars.hcl', 'w') as f:
         f.write('%s = "%s"\n' % (k, v))
 PYEOF
 
-    ssh_exec "$FIRST_NODE" "nomad job run -var-file=/tmp/grafana-vars.hcl infrastructure/grafana/job.nomad.hcl"
+    ssh_exec "$FIRST_NODE" "NOMAD_TOKEN=${NOMAD_TOKEN:-} nomad job run -var-file=/tmp/grafana-vars.hcl infrastructure/grafana/job.nomad.hcl"
 
     log_success "Grafana job submitted"
 
@@ -242,7 +242,7 @@ PYEOF
     local attempt=1
     while [[ $attempt -le 20 ]]; do
         local status
-        status=$(ssh_exec "$FIRST_NODE" "nomad job status grafana | { grep -c running || true; }")
+        status=$(ssh_exec "$FIRST_NODE" "NOMAD_TOKEN=${NOMAD_TOKEN:-} nomad job status grafana | { grep -c running || true; }")
         if [[ "$status" -gt 0 ]]; then
             log_success "Grafana running"
             break
@@ -256,7 +256,7 @@ PYEOF
     log_info "Discovering Grafana host port via Consul..."
     local grafana_port
     grafana_port=$(ssh_exec "$FIRST_NODE" \
-        "curl -s http://localhost:8500/v1/catalog/service/grafana | jq -r '.[0].ServicePort'" | tr -d '[:space:]')
+        "curl -s -H 'X-Consul-Token: ${CONSUL_HTTP_TOKEN:-}' http://localhost:8500/v1/catalog/service/grafana | jq -r '.[0].ServicePort'" | tr -d '[:space:]')
     [[ -n "$grafana_port" && "$grafana_port" != "null" ]] \
         || { log_error "Could not discover Grafana port from Consul"; exit 1; }
     export GRAFANA_PORT="$grafana_port"

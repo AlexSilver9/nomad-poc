@@ -203,23 +203,29 @@ apply_consul_config() {
 generate_bcrypt_hashes() {
     log_info "=== STEP 4: Generating Prometheus bcrypt hashes ==="
 
-    # Install bcrypt on the node if not already available
     ssh_exec "$FIRST_NODE" "pip3 install --quiet bcrypt"
 
-    bcrypt_hash() {
-        local password="$1"
-        ssh_exec "$FIRST_NODE" "python3 -c \
-            \"import bcrypt; print(bcrypt.hashpw(b'${password}', bcrypt.gensalt(rounds=12)).decode())\""
-    }
+    # Passwords are base64-encoded locally so they can be safely embedded in the
+    # heredoc without shell quoting issues (base64 output is [A-Za-z0-9+/=] only).
+    # Hashes are written directly to a var file on the remote node and never returned
+    # as local shell variables — bcrypt hashes contain $ separators that get mangled
+    # by shell variable expansion if passed through command-line -var= arguments.
+    local admin_b64 tech_b64
+    admin_b64=$(printf '%s' "$PROMETHEUS_ADMIN_PASSWORD" | base64)
+    tech_b64=$(printf '%s'  "$PROMETHEUS_TECH_PASSWORD"  | base64)
 
-    PROMETHEUS_ADMIN_HASH=$(bcrypt_hash "$PROMETHEUS_ADMIN_PASSWORD")
-    PROMETHEUS_TECH_HASH=$(bcrypt_hash "$PROMETHEUS_TECH_PASSWORD")
+    ssh $SSH_OPTS -i "$SSH_KEY" "${SSH_USER}@${FIRST_NODE}" python3 <<PYEOF
+import bcrypt, base64
+admin_pw   = base64.b64decode('${admin_b64}').decode()
+tech_pw    = base64.b64decode('${tech_b64}').decode()
+admin_hash = bcrypt.hashpw(admin_pw.encode(), bcrypt.gensalt(rounds=12)).decode()
+tech_hash  = bcrypt.hashpw(tech_pw.encode(),  bcrypt.gensalt(rounds=12)).decode()
+with open('/tmp/prometheus-vars.hcl', 'w') as f:
+    f.write('prometheus_admin_hash = "%s"\n' % admin_hash)
+    f.write('prometheus_tech_hash  = "%s"\n' % tech_hash)
+PYEOF
 
-    [[ -n "$PROMETHEUS_ADMIN_HASH" ]] || { log_error "Failed to generate admin bcrypt hash"; exit 1; }
-    [[ -n "$PROMETHEUS_TECH_HASH"  ]] || { log_error "Failed to generate tech bcrypt hash";  exit 1; }
-
-    log_success "Bcrypt hashes generated"
-    export PROMETHEUS_ADMIN_HASH PROMETHEUS_TECH_HASH
+    log_success "Bcrypt hashes written to /tmp/prometheus-vars.hcl on $FIRST_NODE"
 }
 
 #------------------------------------------------------------------------------
@@ -231,12 +237,11 @@ deploy_prometheus() {
     ssh_exec "$FIRST_NODE" "mkdir -p infrastructure/prometheus && wget -qO infrastructure/prometheus/job.nomad.hcl $GITHUB_RAW_BASE/infrastructure/prometheus/job.nomad.hcl"
 
     local token_vars=""
-    [[ -n "$NOMAD_SCRAPE_TOKEN"      ]] && token_vars="$token_vars -var=nomad_scrape_token=$NOMAD_SCRAPE_TOKEN"
-    [[ -n "${CONSUL_HTTP_TOKEN:-}"   ]] && token_vars="$token_vars -var=consul_token=$CONSUL_HTTP_TOKEN"
-    [[ -n "$PROMETHEUS_ADMIN_HASH"   ]] && token_vars="$token_vars -var=prometheus_admin_hash=$PROMETHEUS_ADMIN_HASH"
-    [[ -n "$PROMETHEUS_TECH_HASH"    ]] && token_vars="$token_vars -var=prometheus_tech_hash=$PROMETHEUS_TECH_HASH"
+    [[ -n "$NOMAD_SCRAPE_TOKEN"    ]] && token_vars="$token_vars -var=nomad_scrape_token=$NOMAD_SCRAPE_TOKEN"
+    [[ -n "${CONSUL_HTTP_TOKEN:-}" ]] && token_vars="$token_vars -var=consul_token=$CONSUL_HTTP_TOKEN"
 
-    ssh_exec "$FIRST_NODE" "nomad job run $token_vars infrastructure/prometheus/job.nomad.hcl"
+    # Bcrypt hashes are in a var file (not -var= args) to avoid $ corruption — see generate_bcrypt_hashes
+    ssh_exec "$FIRST_NODE" "nomad job run $token_vars -var-file=/tmp/prometheus-vars.hcl infrastructure/prometheus/job.nomad.hcl"
     log_success "Prometheus job submitted"
 
     # Wait for Prometheus to be running
@@ -264,12 +269,27 @@ deploy_grafana() {
 
     ssh_exec "$FIRST_NODE" "mkdir -p infrastructure/grafana && wget -qO infrastructure/grafana/job.nomad.hcl $GITHUB_RAW_BASE/infrastructure/grafana/job.nomad.hcl"
 
-    ssh_exec "$FIRST_NODE" "nomad job run \
-        -var=admin_password=$GRAFANA_ADMIN_PASSWORD \
-        -var=grafana_tech_admin_password=$GRAFANA_TECH_ADMIN_PASSWORD \
-        -var=grafana_tech_editor_password=$GRAFANA_TECH_EDITOR_PASSWORD \
-        -var=grafana_tech_viewer_password=$GRAFANA_TECH_VIEWER_PASSWORD \
-        infrastructure/grafana/job.nomad.hcl"
+    # Passwords are base64-encoded to avoid shell expansion of $ in password strings.
+    local admin_b64 tech_admin_b64 tech_editor_b64 tech_viewer_b64
+    admin_b64=$(printf '%s'       "$GRAFANA_ADMIN_PASSWORD"        | base64)
+    tech_admin_b64=$(printf '%s'  "$GRAFANA_TECH_ADMIN_PASSWORD"   | base64)
+    tech_editor_b64=$(printf '%s' "$GRAFANA_TECH_EDITOR_PASSWORD"  | base64)
+    tech_viewer_b64=$(printf '%s' "$GRAFANA_TECH_VIEWER_PASSWORD"  | base64)
+
+    ssh $SSH_OPTS -i "$SSH_KEY" "${SSH_USER}@${FIRST_NODE}" python3 <<PYEOF
+import base64
+vals = {
+    'admin_password':               base64.b64decode('${admin_b64}').decode(),
+    'grafana_tech_admin_password':  base64.b64decode('${tech_admin_b64}').decode(),
+    'grafana_tech_editor_password': base64.b64decode('${tech_editor_b64}').decode(),
+    'grafana_tech_viewer_password': base64.b64decode('${tech_viewer_b64}').decode(),
+}
+with open('/tmp/grafana-vars.hcl', 'w') as f:
+    for k, v in vals.items():
+        f.write('%s = "%s"\n' % (k, v))
+PYEOF
+
+    ssh_exec "$FIRST_NODE" "nomad job run -var-file=/tmp/grafana-vars.hcl infrastructure/grafana/job.nomad.hcl"
 
     log_success "Grafana job submitted"
 
@@ -320,30 +340,41 @@ deploy_grafana() {
 create_grafana_users() {
     log_info "=== STEP 7: Creating Grafana tech users ==="
 
-    grafana_create_user() {
-        local login="$1"
-        local name="$2"
-        local role="$3"
-        local password="$4"
+    # All passwords are base64-encoded to avoid shell expansion of $ over SSH.
+    local admin_b64 tech_admin_b64 tech_editor_b64 tech_viewer_b64
+    admin_b64=$(printf '%s'       "$GRAFANA_ADMIN_PASSWORD"       | base64)
+    tech_admin_b64=$(printf '%s'  "$GRAFANA_TECH_ADMIN_PASSWORD"  | base64)
+    tech_editor_b64=$(printf '%s' "$GRAFANA_TECH_EDITOR_PASSWORD" | base64)
+    tech_viewer_b64=$(printf '%s' "$GRAFANA_TECH_VIEWER_PASSWORD" | base64)
 
-        local response
-        response=$(ssh_exec "$FIRST_NODE" "curl -s -o /dev/null -w '%{http_code}' \
-            -X POST \
-            -H 'Content-Type: application/json' \
-            -u admin:${GRAFANA_ADMIN_PASSWORD} \
-            http://localhost:${GRAFANA_PORT}/api/admin/users \
-            -d '{\"login\":\"${login}\",\"name\":\"${name}\",\"password\":\"${password}\",\"role\":\"${role}\"}'")
+    ssh $SSH_OPTS -i "$SSH_KEY" "${SSH_USER}@${FIRST_NODE}" python3 <<PYEOF
+import base64, urllib.request, urllib.error, json
 
-        if [[ "$response" == "200" ]]; then
-            log_success "User '$login' created (role: $role)"
-        else
-            log_warn "User '$login' may already exist or failed (HTTP $response)"
-        fi
-    }
+admin_pw = base64.b64decode('${admin_b64}').decode()
+port     = ${GRAFANA_PORT}
+users = [
+    ('tech-admin',  'Tech Admin',  'Admin',  base64.b64decode('${tech_admin_b64}').decode()),
+    ('tech-editor', 'Tech Editor', 'Editor', base64.b64decode('${tech_editor_b64}').decode()),
+    ('tech-viewer', 'Tech Viewer', 'Viewer', base64.b64decode('${tech_viewer_b64}').decode()),
+]
 
-    grafana_create_user "tech-admin"  "Tech Admin"  "Admin"  "$GRAFANA_TECH_ADMIN_PASSWORD"
-    grafana_create_user "tech-editor" "Tech Editor" "Editor" "$GRAFANA_TECH_EDITOR_PASSWORD"
-    grafana_create_user "tech-viewer" "Tech Viewer" "Viewer" "$GRAFANA_TECH_VIEWER_PASSWORD"
+import base64 as _b64
+auth = _b64.b64encode(('admin:' + admin_pw).encode()).decode()
+
+for login, name, role, pw in users:
+    payload = json.dumps({'login': login, 'name': name, 'password': pw, 'role': role}).encode()
+    req = urllib.request.Request(
+        'http://localhost:%d/api/admin/users' % port,
+        data=payload,
+        headers={'Content-Type': 'application/json', 'Authorization': 'Basic ' + auth},
+        method='POST',
+    )
+    try:
+        urllib.request.urlopen(req)
+        print('Created user: %s' % login)
+    except urllib.error.HTTPError as e:
+        print('User %s: HTTP %d (may already exist)' % (login, e.code))
+PYEOF
 }
 
 #------------------------------------------------------------------------------

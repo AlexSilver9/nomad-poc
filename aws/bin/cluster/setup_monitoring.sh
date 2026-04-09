@@ -74,6 +74,7 @@ prompt_password() {
     read -rsp "$prompt_text: " value
     echo ""
     [[ -n "$value" ]] || { log_error "Password cannot be empty"; exit 1; }
+    [[ ${#value} -ge 8 ]] || { log_error "Password must be at least 8 characters (Grafana policy)"; exit 1; }
     export "$var_name"="$value"
 }
 
@@ -279,7 +280,7 @@ PYEOF
     log_info "Discovering Grafana host port via Consul..."
     local grafana_port
     grafana_port=$(ssh_exec "$FIRST_NODE" \
-        "curl -s http://localhost:8500/v1/catalog/service/grafana | jq -r '.[0].ServicePort'")
+        "curl -s http://localhost:8500/v1/catalog/service/grafana | jq -r '.[0].ServicePort'" | tr -d '[:space:]')
     [[ -n "$grafana_port" && "$grafana_port" != "null" ]] \
         || { log_error "Could not discover Grafana port from Consul"; exit 1; }
     export GRAFANA_PORT="$grafana_port"
@@ -314,8 +315,8 @@ create_grafana_users() {
     tech_editor_b64=$(printf '%s' "$GRAFANA_TECH_EDITOR_PASSWORD" | base64)
     tech_viewer_b64=$(printf '%s' "$GRAFANA_TECH_VIEWER_PASSWORD" | base64)
 
-    ssh $SSH_OPTS -i "$SSH_KEY" "${SSH_USER}@${FIRST_NODE}" python3 <<PYEOF
-import base64, urllib.request, urllib.error, json
+    ssh $SSH_OPTS -i "$SSH_KEY" "${SSH_USER}@${FIRST_NODE}" python3 - <<PYEOF
+import base64, urllib.request, urllib.error, json, sys
 
 admin_pw = base64.b64decode('${admin_b64}').decode()
 port     = ${GRAFANA_PORT}
@@ -340,8 +341,10 @@ for login, name, role, pw in users:
         urllib.request.urlopen(req)
         print('Created user: %s' % login)
     except urllib.error.HTTPError as e:
-        print('User %s: HTTP %d (may already exist)' % (login, e.code))
+        body = e.read().decode()
+        print('User %s: HTTP %d — %s' % (login, e.code, body), file=sys.stderr)
 PYEOF
+    [[ $? -eq 0 ]] || { log_error "Grafana user creation script failed"; exit 1; }
 }
 
 #------------------------------------------------------------------------------

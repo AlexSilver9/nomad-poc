@@ -8,11 +8,12 @@ set -euo pipefail
 # EFS across re-deploys. Grafana users also persist — tech users are not re-created if
 # they already exist. The Grafana admin password is only set on first init; re-running
 # with a different password has no effect (change it via the Grafana UI/API).
-# Prometheus has no basic auth configured — access is enforced by Consul Connect intentions.
+# Prometheus has no basic auth — access is enforced by Consul Connect intentions.
+# Nomad's /v1/metrics endpoint is public and does not require an ACL token.
 #
 # Prerequisites:
 #   - Cluster is running (ACL enforced or not — both work)
-#   - NOMAD_ADDR is set (NOMAD_TOKEN only needed when Nomad ACL is enforced)
+#   - NOMAD_ADDR is set
 #   - CONSUL_HTTP_ADDR is set (CONSUL_HTTP_TOKEN only needed when Consul ACL is enforced)
 #   - SSH_KEY points to the EC2 keypair (default: ~/workspace/nomad/nomad-keypair.pem)
 #
@@ -128,53 +129,10 @@ configure_nodes() {
 }
 
 #------------------------------------------------------------------------------
-# STEP 2: Detect ACL mode and create metrics-scraper token if needed
-#------------------------------------------------------------------------------
-create_nomad_token() {
-    log_info "=== STEP 2: Detecting ACL mode ==="
-
-    # Probe the metrics endpoint from the node — 403 means ACL is enforcing deny.
-    # Run via SSH so the probe always works regardless of whether port 4646 is
-    # open to the local machine in the security group.
-    local http_status
-    http_status=$(ssh_exec "$FIRST_NODE" \
-        "curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 http://localhost:4646/v1/metrics?format=prometheus")
-
-    if [[ "$http_status" == "403" ]]; then
-        log_info "ACL is enforced (got 403) — creating metrics-scraper token"
-
-        # Download policy file from GitHub and apply
-        ssh_exec "$FIRST_NODE" "mkdir -p acl/nomad/policies && wget -qO acl/nomad/policies/metrics-scraper.policy.hcl $GITHUB_RAW_BASE/acl/nomad/policies/metrics-scraper.policy.hcl"
-        ssh_exec "$FIRST_NODE" "nomad acl policy apply \
-            -description 'Read-only policy for Prometheus metrics scraping' \
-            metrics-scraper \
-            acl/nomad/policies/metrics-scraper.policy.hcl"
-        log_success "Policy 'metrics-scraper' applied"
-
-        # Create token
-        local token_output
-        token_output=$(ssh_exec "$FIRST_NODE" "nomad acl token create \
-            -name=prometheus-metrics-scraper \
-            -policy=metrics-scraper \
-            -type=client")
-
-        NOMAD_SCRAPE_TOKEN=$(echo "$token_output" | grep "^Secret ID" | awk '{print $4}')
-        [[ -n "$NOMAD_SCRAPE_TOKEN" ]] || { log_error "Failed to extract Nomad scrape token"; exit 1; }
-
-        log_success "Nomad scrape token created"
-    else
-        log_info "ACL is not enforced (got $http_status) — deploying without token"
-        NOMAD_SCRAPE_TOKEN=""
-    fi
-
-    export NOMAD_SCRAPE_TOKEN
-}
-
-#------------------------------------------------------------------------------
-# STEP 3: Apply Consul config entries for Prometheus and Grafana
+# STEP 2: Apply Consul config entries for Prometheus and Grafana
 #------------------------------------------------------------------------------
 apply_consul_config() {
-    log_info "=== STEP 3: Applying Consul config entries ==="
+    log_info "=== STEP 2: Applying Consul config entries ==="
 
     # Order matters: service-defaults must be applied before routes.
     local files=(
@@ -198,18 +156,17 @@ apply_consul_config() {
 }
 
 #------------------------------------------------------------------------------
-# STEP 4: Deploy Prometheus
+# STEP 3: Deploy Prometheus
 #------------------------------------------------------------------------------
 deploy_prometheus() {
-    log_info "=== STEP 4: Deploying Prometheus ==="
+    log_info "=== STEP 3: Deploying Prometheus ==="
 
     ssh_exec "$FIRST_NODE" "mkdir -p infrastructure/prometheus && wget -qO infrastructure/prometheus/job.nomad.hcl $GITHUB_RAW_BASE/infrastructure/prometheus/job.nomad.hcl"
 
-    local token_vars=""
-    [[ -n "$NOMAD_SCRAPE_TOKEN"    ]] && token_vars="$token_vars -var=nomad_scrape_token=$NOMAD_SCRAPE_TOKEN"
-    [[ -n "${CONSUL_HTTP_TOKEN:-}" ]] && token_vars="$token_vars -var=consul_token=$CONSUL_HTTP_TOKEN"
+    local consul_var=""
+    [[ -n "${CONSUL_HTTP_TOKEN:-}" ]] && consul_var="-var=consul_token=$CONSUL_HTTP_TOKEN"
 
-    ssh_exec "$FIRST_NODE" "nomad job run $token_vars infrastructure/prometheus/job.nomad.hcl"
+    ssh_exec "$FIRST_NODE" "nomad job run $consul_var infrastructure/prometheus/job.nomad.hcl"
     log_success "Prometheus job submitted"
 
     # Wait for Prometheus to be running
@@ -228,10 +185,10 @@ deploy_prometheus() {
 }
 
 #------------------------------------------------------------------------------
-# STEP 5: Deploy Grafana
+# STEP 4: Deploy Grafana
 #------------------------------------------------------------------------------
 deploy_grafana() {
-    log_info "=== STEP 5: Deploying Grafana ==="
+    log_info "=== STEP 4: Deploying Grafana ==="
 
     # Grafana reaches Prometheus via its Connect sidecar upstream (localhost:9091).
 
@@ -303,10 +260,10 @@ PYEOF
 }
 
 #------------------------------------------------------------------------------
-# STEP 6: Create Grafana tech users via API
+# STEP 5: Create Grafana tech users via API
 #------------------------------------------------------------------------------
 create_grafana_users() {
-    log_info "=== STEP 6: Creating Grafana tech users ==="
+    log_info "=== STEP 5: Creating Grafana tech users ==="
 
     # All passwords are base64-encoded to avoid shell expansion of $ over SSH.
     local admin_b64 tech_admin_b64 tech_editor_b64 tech_viewer_b64
@@ -348,10 +305,10 @@ PYEOF
 }
 
 #------------------------------------------------------------------------------
-# STEP 7: Save credentials
+# STEP 6: Save credentials
 #------------------------------------------------------------------------------
 save_credentials() {
-    log_info "=== STEP 7: Saving credentials ==="
+    log_info "=== STEP 6: Saving credentials ==="
 
     mkdir -p "$ACL_DIR"
     # Use 'EOF' (quoted) to prevent shell expansion — passwords may contain $, !, backticks.
@@ -371,9 +328,6 @@ EOF
     printf 'GRAFANA_TECH_EDITOR_PASSWORD=%s\n'  "$GRAFANA_TECH_EDITOR_PASSWORD"  >> "$MONITORING_TOKENS_FILE"
     printf 'GRAFANA_TECH_VIEWER_PASSWORD=%s\n'  "$GRAFANA_TECH_VIEWER_PASSWORD"  >> "$MONITORING_TOKENS_FILE"
 
-    if [[ -n "$NOMAD_SCRAPE_TOKEN" ]]; then
-        printf '\n# Nomad ACL\nNOMAD_SCRAPE_TOKEN=%s\n' "$NOMAD_SCRAPE_TOKEN" >> "$MONITORING_TOKENS_FILE"
-    fi
 
     log_success "Credentials saved to $MONITORING_TOKENS_FILE"
 }
@@ -391,7 +345,6 @@ main() {
     prompt_passwords
     discover_nodes
     configure_nodes
-    create_nomad_token
     apply_consul_config
     deploy_prometheus
     deploy_grafana

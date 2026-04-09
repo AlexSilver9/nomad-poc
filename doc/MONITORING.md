@@ -177,22 +177,7 @@ client {
 
 ## ACL
 
-Monitoring works with and without ACL enforcement.
-
-| ACL state | Behaviour |
-|-----------|-----------|
-| Not enforced | Prometheus scrapes `/v1/metrics` unauthenticated. No token is created. |
-| Enforced (403) | `setup_monitoring.sh` automatically creates a `metrics-scraper` token and passes it to the Prometheus job. Token is saved to `aws/acl/monitoring-credentials.txt` (gitignored). |
-
-If ACL is enabled **after** monitoring is already running, re-run `setup_monitoring.sh`. It will detect the 403, create the token, and redeploy Prometheus with it — no data loss.
-
-The `metrics-scraper` policy grants the minimum required permissions:
-
-```hcl
-agent     { policy = "read" }
-node      { policy = "read" }
-namespace "default" { policy = "read" }
-```
+Monitoring works regardless of Nomad ACL enforcement. Nomad's `/v1/metrics` endpoint is intentionally public and does not require an ACL token. Consul ACL is handled via `CONSUL_HTTP_TOKEN` passed as a job variable when Consul ACL is enforced.
 
 ---
 

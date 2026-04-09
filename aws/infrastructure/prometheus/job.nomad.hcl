@@ -1,9 +1,3 @@
-variable "nomad_scrape_token" {
-  type        = string
-  description = "Nomad ACL token for scraping /v1/metrics. Set automatically by setup_monitoring.sh when ACL is enforced. Leave empty (default) when ACL is not enforced."
-  default     = ""
-}
-
 variable "consul_token" {
   type        = string
   description = "Consul ACL token for service discovery. Set automatically by setup_monitoring.sh when ACL is enforced. Leave empty (default) when ACL is not enforced."
@@ -87,10 +81,6 @@ scrape_configs:
     metrics_path: /v1/metrics
     params:
       format: [prometheus]
-{{ if env "NOMAD_SCRAPE_TOKEN" }}
-    authorization:
-      credentials: {{ env "NOMAD_SCRAPE_TOKEN" }}
-{{ end }}
     consul_sd_configs:
       - server: '{{ env "CONSUL_ADDR" }}'
 {{ if env "CONSUL_HTTP_TOKEN" }}
@@ -116,8 +106,7 @@ EOF
       env {
         # Node IP used for Consul SD — bridge mode containers cannot reach host loopback
         CONSUL_ADDR       = "http://${attr.unique.network.ip-address}:8500"
-        NOMAD_SCRAPE_TOKEN = var.nomad_scrape_token
-        CONSUL_HTTP_TOKEN  = var.consul_token
+        CONSUL_HTTP_TOKEN = var.consul_token
       }
 
       resources {

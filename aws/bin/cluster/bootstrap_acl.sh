@@ -234,16 +234,19 @@ else
 
 for node in "${NODES[@]}"; do
   echo "  $node — writing /etc/nomad.d/consul.hcl (address + grpc_address + token)"
-  # grpc_address must be the node IP (not 127.0.0.1): Nomad embeds it in the Envoy sidecar
-  # bootstrap JSON as the xDS cluster. Envoy runs inside a bridge network namespace where
-  # 127.0.0.1 is the container's own loopback — the node IP routes through the bridge to host.
+  # grpc_address: node IP + port 8502 (plain gRPC).
+  # Node IP: Nomad creates a unix socket proxy to this address for Envoy sidecars.
+  #   The socket is accessed from inside bridge network namespaces where 127.0.0.1
+  #   is the container's own loopback — the node IP routes through the bridge to host.
+  # Port 8502: Nomad's unix socket proxy is a plain TCP proxy (no TLS). Port 8503
+  #   requires TLS; Consul terminates plain connections to it immediately.
   node_ip=$(ssh_exec "$node" "/sbin/ip route get 1 | awk '{print \$7; exit}'")
   ssh_exec "$node" "sudo tee /etc/nomad.d/consul.hcl > /dev/null" <<HCLEOF
 # Nomad-Consul integration — written by bootstrap_acl.sh.
 # Single file avoids HCL merge issues across multiple consul{} blocks.
 consul {
   address      = "127.0.0.1:8500"
-  grpc_address = "${node_ip}:8503"
+  grpc_address = "${node_ip}:8502"
   token        = "$CONSUL_NOMAD_TOKEN"
 
   # Enable workload identity for Connect sidecar proxies (Nomad 1.7+).

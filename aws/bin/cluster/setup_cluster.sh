@@ -381,7 +381,7 @@ run_nomad_jobs() {
         fi
     done
 
-    # Run jobs in order — continue on failure; report at the end
+    # Run jobs in order — block on each deployment but continue on failure.
     log_info "Running Nomad jobs..."
     local failed_jobs=()
     for file in "${nomad_jobs[@]}"; do
@@ -391,10 +391,8 @@ run_nomad_jobs() {
             log_warn "$name deployment failed — continuing (check 'nomad job status $name')"
             failed_jobs+=("$name")
         fi
-        sleep 5
     done
 
-    # Verify jobs
     log_info "Checking job status..."
     ssh_run "$first_node" "nomad status"
 
@@ -402,7 +400,7 @@ run_nomad_jobs() {
         log_warn "The following jobs did not deploy successfully: ${failed_jobs[*]}"
         log_warn "Run 'nomad job status <job>' on a cluster node to investigate"
     else
-        log_success "All Nomad jobs started successfully"
+        log_success "All Nomad jobs deployed successfully"
     fi
 }
 

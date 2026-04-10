@@ -42,9 +42,8 @@ The `NOMAD-CONSUL` security group (e.g. `sg-08e51d2a581377e0b`) must allow the p
 | 8301 | TCP + UDP | EC2 nodes (self) | Consul Serf LAN gossip (cluster membership) |
 | 8443 | TCP | Operator IPs | nginx/Traefik HTTPS rewriter (direct node access, not via ALB in POC) |
 | 8500 | TCP | Operator IPs | Consul HTTP API and UI |
-| 9090 | TCP | Operator IPs | Prometheus UI (only needed when monitoring is deployed) |
-| 3000 | TCP | Operator IPs | Grafana UI (only needed when monitoring is deployed) |
-| 8502 | TCP | EC2 nodes (self) | Consul gRPC — Envoy xDS (sidecars and API Gateway connect to Consul here) |
+| 8502 | TCP | EC2 nodes (self) | Consul gRPC (plain) — kept for backwards compatibility; not used by Envoy xDS in Consul 1.14+ |
+| 8503 | TCP | EC2 nodes (self) | Consul gRPC TLS — Envoy xDS (required by Consul 1.14+; mandatory in 1.22+ for Connect sidecar bootstrap) |
 | 19000 | TCP | EC2 nodes (self) | Envoy admin API (API Gateway — only needed for debugging) |
 | 20000–32000 | TCP | EC2 nodes (self) | Dynamic Nomad allocation ports (Envoy sidecars, service health checks) |
 

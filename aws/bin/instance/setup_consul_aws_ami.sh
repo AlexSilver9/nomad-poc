@@ -97,9 +97,12 @@ connect {
   enabled = true
 }
 
-# gRPC port for Envoy xDS (Connect gateways require Consul's gRPC interface to communicate with Envoy sidecars)
+# gRPC ports for Envoy xDS.
+# grpc (8502): plain gRPC (kept for backwards compat)
+# grpc_tls (8503): TLS gRPC — required by Consul 1.22+ for Connect sidecar bootstrap
 ports {
-  grpc = 8502
+  grpc     = 8502
+  grpc_tls = 8503
 }
 
 # Performance tuning

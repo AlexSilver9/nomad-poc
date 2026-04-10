@@ -91,7 +91,7 @@ job "api-gateway" {
         # Node IP (not 127.0.0.1) is required: bridge networking containers cannot
         # reach the host loopback. attr.unique.network.ip-address is the node's primary IP.
         CONSUL_HTTP_ADDR = "http://${attr.unique.network.ip-address}:8500"
-        CONSUL_GRPC_ADDR = "${attr.unique.network.ip-address}:8502"
+        CONSUL_GRPC_ADDR = "${attr.unique.network.ip-address}:8503"
       }
 
       resources {

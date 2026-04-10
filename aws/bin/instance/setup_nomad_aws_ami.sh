@@ -111,7 +111,7 @@ if systemctl list-unit-files consul.service > /dev/null; then
   sudo tee /etc/nomad.d/consul.hcl > /dev/null <<'CONSULEOF'
 consul {
   address      = "127.0.0.1:8500"
-  grpc_address = "127.0.0.1:8502"
+  grpc_address = "127.0.0.1:8503"
 }
 CONSULEOF
 

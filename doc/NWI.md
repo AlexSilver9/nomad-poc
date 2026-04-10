@@ -200,7 +200,7 @@ task "setup" {
   env {
     # Node IP required — bridge networking containers cannot reach the host loopback
     CONSUL_HTTP_ADDR = "http://${attr.unique.network.ip-address}:8500"
-    CONSUL_GRPC_ADDR = "${attr.unique.network.ip-address}:8502"
+    CONSUL_GRPC_ADDR = "${attr.unique.network.ip-address}:8503"
   }
 }
 ```

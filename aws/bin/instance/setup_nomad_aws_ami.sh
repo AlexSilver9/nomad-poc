@@ -108,10 +108,15 @@ if systemctl list-unit-files consul.service > /dev/null; then
   # Write consul.hcl with basic Nomad-Consul connectivity. No ACL token or service_identity yet.
   # bootstrap_acl.sh overwrites this file to add the Consul token + service_identity block
   # (required for Connect proxy token derivation in Consul ACL deny mode).
-  sudo tee /etc/nomad.d/consul.hcl > /dev/null <<'CONSULEOF'
+  # grpc_address must be the node IP, not 127.0.0.1.
+  # Nomad embeds this address in the Envoy sidecar bootstrap JSON as the xDS cluster.
+  # Envoy runs inside the bridge network namespace where 127.0.0.1 is the container's
+  # own loopback — Consul is not reachable there. The node IP routes through the bridge
+  # back to the host where Consul is listening on grpc_tls port 8503.
+  sudo tee /etc/nomad.d/consul.hcl > /dev/null <<CONSULEOF
 consul {
   address      = "127.0.0.1:8500"
-  grpc_address = "127.0.0.1:8503"
+  grpc_address = "${NODE_IP}:8503"
 }
 CONSULEOF
 

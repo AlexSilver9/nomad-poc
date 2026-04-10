@@ -381,12 +381,16 @@ run_nomad_jobs() {
         fi
     done
 
-    # Run jobs in order
+    # Run jobs in order — continue on failure; report at the end
     log_info "Running Nomad jobs..."
+    local failed_jobs=()
     for file in "${nomad_jobs[@]}"; do
         local name=$(basename $(dirname "$file"))
         log_info "Starting $name..."
-        ssh_run "$first_node" "nomad job run $file"
+        if ! ssh_run "$first_node" "nomad job run $file"; then
+            log_warn "$name deployment failed — continuing (check 'nomad job status $name')"
+            failed_jobs+=("$name")
+        fi
         sleep 5
     done
 
@@ -394,17 +398,12 @@ run_nomad_jobs() {
     log_info "Checking job status..."
     ssh_run "$first_node" "nomad status"
 
-    # Verify api-gateway job is running
-    log_info "Verifying api-gateway job..."
-    local gw_status
-    gw_status=$(ssh_run "$first_node" "nomad job status api-gateway | grep -c running" || echo "0")
-    if [[ "$gw_status" -eq 0 ]]; then
-        log_warn "api-gateway allocations not yet running — check 'nomad job status api-gateway'"
+    if [[ ${#failed_jobs[@]} -gt 0 ]]; then
+        log_warn "The following jobs did not deploy successfully: ${failed_jobs[*]}"
+        log_warn "Run 'nomad job status <job>' on a cluster node to investigate"
     else
-        log_success "api-gateway running ($gw_status allocation(s))"
+        log_success "All Nomad jobs started successfully"
     fi
-
-    log_success "Nomad jobs started"
 }
 
 #------------------------------------------------------------------------------

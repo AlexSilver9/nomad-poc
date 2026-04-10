@@ -90,6 +90,10 @@ if [[ ! -f "${NOMAD_SYSTEMD_CONFIG}" ]]; then
   exit 1
 fi
 
+# Determine bind address from default route (avoids ambiguity with Docker bridge etc.)
+# Computed early — needed for grpc_address in consul.hcl (Envoy xDS cluster in bridge mode).
+NODE_IP="$(/sbin/ip route get 1 | awk '{print $7; exit}')"
+
 # Integrate Nomad with Consul if consul.service exists
 nomad_user=""
 nomad_group=""
@@ -161,9 +165,6 @@ sudo tee /data/index.html > /dev/null <<EOF
 EOF
 sudo chmod a+r /data/*
 
-
-# Determine bind address from default route (avoids ambiguity with Docker bridge etc.)
-NODE_IP="$(/sbin/ip route get 1 | awk '{print $7; exit}')"
 
 # Create Nomad config
 sudo tee /etc/nomad.d/nomad.hcl > /dev/null <<EOF

@@ -91,7 +91,11 @@ job "api-gateway" {
         # Node IP (not 127.0.0.1) is required: bridge networking containers cannot
         # reach the host loopback. attr.unique.network.ip-address is the node's primary IP.
         CONSUL_HTTP_ADDR = "http://${attr.unique.network.ip-address}:8500"
-        CONSUL_GRPC_ADDR = "${attr.unique.network.ip-address}:8503"
+        # Port 8502 (plain gRPC): consul connect envoy -bootstrap generates the local_agent
+        # cluster with http2_protocol_options (no TLS). Port 8503 is TLS — plain HTTP/2 to
+        # a TLS port causes immediate connection termination in Envoy.
+        # Rule: everything uses 8502. Port 8503 is for consul CLI's own TLS session only.
+        CONSUL_GRPC_ADDR = "${attr.unique.network.ip-address}:8502"
       }
 
       resources {

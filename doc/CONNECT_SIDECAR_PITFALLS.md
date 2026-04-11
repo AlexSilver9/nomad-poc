@@ -57,25 +57,28 @@ causes immediate connection termination.
 
 ---
 
-## 3. api-gateway `CONSUL_GRPC_ADDR` must use port 8503
+## 3. api-gateway `CONSUL_GRPC_ADDR` must also use port 8502
 
-**Symptom**: api-gateway `setup` task fails to generate Envoy bootstrap config:
-```
-consul connect envoy -gateway api -register ... -bootstrap: exit status 1
-```
+**Symptom**: api-gateway Envoy gets the same "connection termination" error as Connect sidecars,
+even though the `setup` task (consul container) exits 0 and the bootstrap JSON is generated.
+No listeners appear in Envoy — no traffic is routed.
 
-**Root cause**: In Consul 1.22, the plain gRPC port (8502) no longer accepts the xDS protocol.
-The `consul connect envoy -bootstrap` CLI requires TLS gRPC on port 8503.
+**Root cause**: `consul connect envoy -bootstrap` generates the `local_agent` cluster in the
+bootstrap JSON with `http2_protocol_options: {}` — plain HTTP/2, no TLS transport socket.
+When `CONSUL_GRPC_ADDR` is port 8503 (TLS), Envoy sends plain HTTP/2 to a TLS port → Consul
+terminates immediately. The consul CLI itself can negotiate TLS to connect to 8503 for the
+bootstrap generation step, but the JSON it emits for Envoy always uses plain gRPC.
 
 **Fix**:
 ```hcl
 env {
-  CONSUL_GRPC_ADDR = "${attr.unique.network.ip-address}:8503"
+  CONSUL_GRPC_ADDR = "${attr.unique.network.ip-address}:8502"
 }
 ```
 
-Note: Must use `attr.unique.network.ip-address` (node IP), not `127.0.0.1`, for the same
-bridge namespace reason as above.
+**The universal rule**: everything uses port 8502. Port 8503 exists in the Consul config but
+is only used by the consul CLI for its own TLS connection — it is never embedded in bootstrap
+JSON for Envoy.
 
 **Affects**: `infrastructure/api-gateway/job.nomad.hcl`
 
@@ -189,7 +192,7 @@ deployments the database persists across redeploys.
 Before enabling ACL and deploying monitoring in production, verify:
 
 - [ ] `grpc_address` in `consul.hcl` uses `<NODE_IP>:8502` (not `127.0.0.1`, not 8503)
-- [ ] api-gateway job uses `CONSUL_GRPC_ADDR = "<NODE_IP>:8503"`
+- [ ] api-gateway job uses `CONSUL_GRPC_ADDR = "<NODE_IP>:8502"` (not 8503 — bootstrap JSON uses plain HTTP/2, no TLS)
 - [ ] After `bootstrap_acl.sh`: restart api-gateway and all Connect sidecar jobs
 - [ ] `NOMAD_TOKEN` and `CONSUL_HTTP_TOKEN` are exported before running any cluster script
 - [ ] Consul config entries (service-defaults, intentions, routes) applied before deploying jobs

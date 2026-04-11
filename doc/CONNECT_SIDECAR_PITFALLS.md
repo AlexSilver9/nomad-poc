@@ -193,7 +193,7 @@ Before enabling ACL and deploying monitoring in production, verify:
 
 - [ ] `grpc_address` in `consul.hcl` uses `<NODE_IP>:8502` (not `127.0.0.1`, not 8503)
 - [ ] api-gateway job uses `CONSUL_GRPC_ADDR = "<NODE_IP>:8502"` (not 8503 — bootstrap JSON uses plain HTTP/2, no TLS)
-- [ ] After `bootstrap_acl.sh`: restart api-gateway and all Connect sidecar jobs
+- [ ] After `bootstrap_acl.sh`: restart api-gateway and all Connect sidecar jobs (they have no NWI token and will be rejected by Consul xDS in enforce mode — new routes will not appear until restarted)
 - [ ] `NOMAD_TOKEN` and `CONSUL_HTTP_TOKEN` are exported before running any cluster script
 - [ ] Consul config entries (service-defaults, intentions, routes) applied before deploying jobs
 - [ ] Grafana passwords are at least 8 characters

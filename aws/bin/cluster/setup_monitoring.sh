@@ -65,14 +65,24 @@ check_prerequisites() {
 
     if [[ "$nomad_status" == "403" ]]; then
         [[ -n "${NOMAD_TOKEN:-}" ]] || { log_error "Nomad ACL is enforced — NOMAD_TOKEN must be set"; exit 1; }
-        log_info "Nomad ACL enforced — token provided"
+        # Verify the token is valid (not just non-empty)
+        local nomad_verify
+        nomad_verify=$(ssh_exec "$FIRST_NODE" \
+            "curl -s -o /dev/null -w '%{http_code}' -H 'X-Nomad-Token: ${NOMAD_TOKEN}' http://localhost:4646/v1/jobs")
+        [[ "$nomad_verify" == "200" ]] || { log_error "NOMAD_TOKEN is set but rejected by Nomad (HTTP $nomad_verify) — check the token SecretID"; exit 1; }
+        log_info "Nomad ACL enforced — token verified"
     else
         log_info "Nomad ACL not enforced"
     fi
 
     if [[ "$consul_status" == "403" ]]; then
         [[ -n "${CONSUL_HTTP_TOKEN:-}" ]] || { log_error "Consul ACL is enforced — CONSUL_HTTP_TOKEN must be set"; exit 1; }
-        log_info "Consul ACL enforced — token provided"
+        # Verify the token is valid (not just non-empty)
+        local consul_verify
+        consul_verify=$(ssh_exec "$FIRST_NODE" \
+            "curl -s -o /dev/null -w '%{http_code}' -H 'X-Consul-Token: ${CONSUL_HTTP_TOKEN}' http://localhost:8500/v1/agent/self")
+        [[ "$consul_verify" == "200" ]] || { log_error "CONSUL_HTTP_TOKEN is set but rejected by Consul (HTTP $consul_verify) — check the token SecretID"; exit 1; }
+        log_info "Consul ACL enforced — token verified"
     else
         log_info "Consul ACL not enforced"
     fi
@@ -138,13 +148,16 @@ configure_nodes() {
 
     # Wait for Nomad leader to be elected after rolling restarts
     log_info "Waiting for Nomad cluster to recover..."
+    local recovered=false
     for i in $(seq 1 15); do
-        if ssh_exec "$FIRST_NODE" "NOMAD_TOKEN=${NOMAD_TOKEN:-} nomad server members | { grep -q alive || true; }"; then
+        if ssh_exec "$FIRST_NODE" "NOMAD_TOKEN=${NOMAD_TOKEN:-} nomad server members 2>/dev/null | grep -q alive"; then
             log_success "Nomad cluster healthy"
+            recovered=true
             break
         fi
         sleep 3
     done
+    [[ "$recovered" == "true" ]] || log_warn "Nomad cluster may not be fully recovered — check 'nomad server members'"
 }
 
 #------------------------------------------------------------------------------

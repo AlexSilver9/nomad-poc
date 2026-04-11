@@ -96,14 +96,12 @@ Once deny mode is active, Consul rejects their anonymous xDS connections. New Co
 entries (routes, intentions) also never reach the api-gateway for the same reason — its xDS
 stream is rejected, so it never receives updates.
 
-**Fix**: `bootstrap_acl.sh` now does this automatically — it snapshots each running job's spec
-from Nomad (variables already resolved), stops the job, and re-runs from the snapshot.
-This works for all jobs including those deployed with var-files. If running manually:
+**Fix**: `bootstrap_acl.sh` now does this automatically — it reads the running job list from
+`nomad job status`, stops each job, and re-runs it from the HCL file on disk. If running manually:
 ```bash
 # For each running job:
-NOMAD_TOKEN=<mgmt> nomad job inspect -json <job> | jq '.Job' > /tmp/<job>.json
 NOMAD_TOKEN=<mgmt> nomad job stop <job>
-NOMAD_TOKEN=<mgmt> nomad job run -json /tmp/<job>.json
+NOMAD_TOKEN=<mgmt> nomad job run <path>/job.nomad.hcl
 ```
 
 **Affects**: Every job with a Connect sidecar or the api-gateway — i.e. all jobs on the cluster.

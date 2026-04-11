@@ -84,22 +84,28 @@ JSON for Envoy.
 
 ---
 
-## 4. After `bootstrap_acl.sh`, running jobs must be restarted to pick up NWI tokens
+## 4. After `bootstrap_acl.sh`, ALL running jobs must be restarted to pick up NWI tokens
 
-**Symptom**: api-gateway stops routing traffic immediately after ACL enforcement is switched
-to `default_policy = "deny"`, even though `bootstrap_acl.sh` succeeded.
+**Symptom**: After ACL enforcement (`default_policy = "deny"`), api-gateway stops routing
+traffic, Connect sidecar services (web-service, https-service, etc.) become unhealthy, and
+no routes are reachable — even though `bootstrap_acl.sh` succeeded and Consul config entries
+are correctly applied.
 
-**Root cause**: The api-gateway allocation running before ACL was bootstrapped has no NWI token.
-Once deny mode is active, its anonymous xDS connection is rejected by Consul.
+**Root cause**: Every allocation that was started before ACL bootstrap has no NWI JWT injected.
+Once deny mode is active, Consul rejects their anonymous xDS connections. New Consul config
+entries (routes, intentions) also never reach the api-gateway for the same reason — its xDS
+stream is rejected, so it never receives updates.
 
-**Fix**: Restart the api-gateway after `bootstrap_acl.sh` and before `enforce_acl.sh`:
+**Fix**: `bootstrap_acl.sh` now does this automatically (inspect → stop → run from saved spec
+for every running job). If running manually:
 ```bash
-nomad job stop api-gateway
-NOMAD_TOKEN=<mgmt> nomad job run infrastructure/api-gateway/job.nomad.hcl
+# For each running job:
+NOMAD_TOKEN=<mgmt> nomad job inspect -json <job> | jq '.Job' > /tmp/<job>.json
+NOMAD_TOKEN=<mgmt> nomad job stop <job>
+NOMAD_TOKEN=<mgmt> nomad job run /tmp/<job>.json
 ```
 
-Similarly, all Connect sidecar jobs (web-service, business-service, etc.) should be restarted
-to pick up service identity tokens.
+**Affects**: Every job with a Connect sidecar or the api-gateway — i.e. all jobs on the cluster.
 
 ---
 
@@ -193,7 +199,7 @@ Before enabling ACL and deploying monitoring in production, verify:
 
 - [ ] `grpc_address` in `consul.hcl` uses `<NODE_IP>:8502` (not `127.0.0.1`, not 8503)
 - [ ] api-gateway job uses `CONSUL_GRPC_ADDR = "<NODE_IP>:8502"` (not 8503 — bootstrap JSON uses plain HTTP/2, no TLS)
-- [ ] After `bootstrap_acl.sh`: restart api-gateway and all Connect sidecar jobs (they have no NWI token and will be rejected by Consul xDS in enforce mode — new routes will not appear until restarted)
+- [ ] After `bootstrap_acl.sh`: all running jobs are restarted automatically — verify no jobs are stuck in `dead` state before running `enforce_acl.sh`
 - [ ] `NOMAD_TOKEN` and `CONSUL_HTTP_TOKEN` are exported before running any cluster script
 - [ ] Consul config entries (service-defaults, intentions, routes) applied before deploying jobs
 - [ ] Grafana passwords are at least 8 characters

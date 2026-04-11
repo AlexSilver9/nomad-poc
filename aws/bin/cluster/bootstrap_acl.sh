@@ -385,7 +385,30 @@ echo "  Verify Nomad UI:   http://<node>:4646  (Nomad management token required)
 echo "  Verify NWI auth method: consul acl auth-method list  (should list 'nomad-workloads')"
 echo "  Create roles + user tokens:       ./aws/bin/instance/create_user_tokens.sh  (run on a node)"
 echo ""
-echo "  [MAINTENANCE WINDOW] Before switching Consul to deny, restart the api-gateway job so"
-echo "  its allocation picks up a NWI token (the running allocation started before NWI existed):"
-echo "    nomad job stop api-gateway && nomad job run infrastructure/api-gateway/job.nomad.hcl"
+# Restart all running Nomad jobs so new allocations pick up NWI tokens.
+# Allocations started before ACL bootstrap have no JWT injected — Consul rejects their
+# xDS stream in enforce mode, so Connect sidecars and the api-gateway will not route traffic.
+# Only runs on first bootstrap (not on re-runs where NWI was already configured).
+if [[ "$NOMAD_MGMT_TOKEN" != "<already-bootstrapped>" ]]; then
+  echo "Restarting all running Nomad jobs to pick up NWI tokens..."
+  RUNNING_JOBS=()
+  while IFS= read -r line; do
+    RUNNING_JOBS+=("$line")
+  done < <(ssh_exec "$BOOTSTRAP_NODE" \
+    "NOMAD_TOKEN=${NOMAD_MGMT_TOKEN} nomad job status 2>/dev/null | awk 'NR>1 && \$4==\"running\" {print \$1}'")
+
+  for job in "${RUNNING_JOBS[@]}"; do
+    echo "  Restarting $job..."
+    # Save the current job spec, stop the job, then re-run from the saved spec.
+    # This avoids needing the original HCL file on disk.
+    ssh_exec "$BOOTSTRAP_NODE" \
+      "NOMAD_TOKEN=${NOMAD_MGMT_TOKEN} nomad job inspect -json $job | jq '.Job' > /tmp/nomad-restart-${job}.json && \
+       NOMAD_TOKEN=${NOMAD_MGMT_TOKEN} nomad job stop $job > /dev/null && \
+       NOMAD_TOKEN=${NOMAD_MGMT_TOKEN} nomad job run /tmp/nomad-restart-${job}.json > /dev/null"
+    echo "    $job restarted"
+  done
+else
+  echo "ACL already bootstrapped — skipping job restart (NWI tokens were already configured)"
+fi
+echo ""
 echo "  Then switch Consul to deny: ./aws/bin/cluster/enforce_acl.sh"

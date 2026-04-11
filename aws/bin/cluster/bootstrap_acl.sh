@@ -401,8 +401,8 @@ if [[ "$NOMAD_MGMT_TOKEN" != "<already-bootstrapped>" ]]; then
   for file in "${JOB_FILES[@]}"; do
     job=$(basename "$(dirname "$file")")
     echo "  Restarting $job..."
-    ssh_exec "$BOOTSTRAP_NODE" "NOMAD_TOKEN=${NOMAD_MGMT_TOKEN} nomad job stop $job > /dev/null 2>&1 || true"
-    if ssh_exec "$BOOTSTRAP_NODE" "NOMAD_TOKEN=${NOMAD_MGMT_TOKEN} nomad job run $file > /dev/null 2>&1"; then
+    ssh_exec "$BOOTSTRAP_NODE" "NOMAD_TOKEN=${NOMAD_MGMT_TOKEN} nomad job stop $job || true"
+    if ssh_exec "$BOOTSTRAP_NODE" "NOMAD_TOKEN=${NOMAD_MGMT_TOKEN} nomad job run $file"; then
       echo "    $job restarted"
     else
       echo "    $job needs variables — skipping (restart via its setup script)"

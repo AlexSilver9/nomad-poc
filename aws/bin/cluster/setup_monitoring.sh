@@ -185,6 +185,15 @@ apply_consul_config() {
     done
 
     log_success "Consul config entries applied"
+
+    # Restart api-gateway so Envoy picks up the new routes via xDS.
+    # An alloc started before ACL bootstrap has no NWI token — Consul rejects its xDS stream
+    # in enforce mode, so newly written config entries never reach it until it is restarted.
+    log_info "Restarting api-gateway to pick up new routes..."
+    ssh_exec "$FIRST_NODE" "NOMAD_TOKEN=${NOMAD_TOKEN:-} nomad job stop api-gateway || true"
+    ssh_exec "$FIRST_NODE" "mkdir -p infrastructure/api-gateway && wget -qO infrastructure/api-gateway/job.nomad.hcl $GITHUB_RAW_BASE/infrastructure/api-gateway/job.nomad.hcl"
+    ssh_exec "$FIRST_NODE" "NOMAD_TOKEN=${NOMAD_TOKEN:-} nomad job run infrastructure/api-gateway/job.nomad.hcl"
+    log_success "api-gateway restarted"
 }
 
 #------------------------------------------------------------------------------

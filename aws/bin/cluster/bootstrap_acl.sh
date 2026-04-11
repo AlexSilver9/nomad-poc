@@ -391,22 +391,30 @@ echo ""
 # Only runs on first bootstrap (not on re-runs where NWI was already configured).
 if [[ "$NOMAD_MGMT_TOKEN" != "<already-bootstrapped>" ]]; then
   echo "Restarting all running Nomad jobs to pick up NWI tokens..."
-  RUNNING_JOBS=()
+  SKIPPED_JOBS=()
+  JOB_FILES=()
   while IFS= read -r line; do
-    RUNNING_JOBS+=("$line")
+    JOB_FILES+=("$line")
   done < <(ssh_exec "$BOOTSTRAP_NODE" \
-    "NOMAD_TOKEN=${NOMAD_MGMT_TOKEN} nomad job status 2>/dev/null | awk 'NR>1 && \$4==\"running\" {print \$1}'")
+    "find ~/infrastructure ~/services -name 'job.nomad.hcl' 2>/dev/null")
 
-  for job in "${RUNNING_JOBS[@]}"; do
+  for file in "${JOB_FILES[@]}"; do
+    job=$(basename "$(dirname "$file")")
     echo "  Restarting $job..."
-    # Save the current job spec, stop the job, then re-run from the saved spec.
-    # This avoids needing the original HCL file on disk.
-    ssh_exec "$BOOTSTRAP_NODE" \
-      "NOMAD_TOKEN=${NOMAD_MGMT_TOKEN} nomad job inspect -json $job | jq '.Job' > /tmp/nomad-restart-${job}.json && \
-       NOMAD_TOKEN=${NOMAD_MGMT_TOKEN} nomad job stop $job > /dev/null && \
-       NOMAD_TOKEN=${NOMAD_MGMT_TOKEN} nomad job run /tmp/nomad-restart-${job}.json > /dev/null"
-    echo "    $job restarted"
+    ssh_exec "$BOOTSTRAP_NODE" "NOMAD_TOKEN=${NOMAD_MGMT_TOKEN} nomad job stop $job > /dev/null 2>&1 || true"
+    if ssh_exec "$BOOTSTRAP_NODE" "NOMAD_TOKEN=${NOMAD_MGMT_TOKEN} nomad job run $file > /dev/null 2>&1"; then
+      echo "    $job restarted"
+    else
+      echo "    $job needs variables — skipping (restart via its setup script)"
+      SKIPPED_JOBS+=("$job")
+    fi
   done
+
+  if [[ ${#SKIPPED_JOBS[@]} -gt 0 ]]; then
+    echo ""
+    echo "  Jobs skipped (require var-files): ${SKIPPED_JOBS[*]}"
+    echo "  Restart these manually after running their setup scripts (e.g. setup_monitoring.sh)"
+  fi
 else
   echo "ACL already bootstrapped — skipping job restart (NWI tokens were already configured)"
 fi

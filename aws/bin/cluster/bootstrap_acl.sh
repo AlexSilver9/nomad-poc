@@ -393,7 +393,7 @@ if [[ "$NOMAD_MGMT_TOKEN" != "<already-bootstrapped>" ]]; then
   echo "Restarting all running Nomad jobs to pick up NWI tokens..."
   RUNNING_JOBS=()
   while IFS= read -r line; do
-    RUNNING_JOBS+=("$line")
+    [[ -n "$line" ]] && RUNNING_JOBS+=("$line")
   done < <(ssh_exec "$BOOTSTRAP_NODE" \
     "NOMAD_TOKEN=${NOMAD_MGMT_TOKEN} nomad job status 2>/dev/null | awk 'NR>1 && \$4==\"running\" {print \$1}'")
 

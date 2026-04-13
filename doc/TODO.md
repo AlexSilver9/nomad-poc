@@ -60,7 +60,6 @@
 - Reserve resources for Nginx + API-Gateway
 - Onboarding 3 neue Nodees als Client (1 als isolated: 'sls-ssh-sync')
 - CPU & Memory Settings / Limits erarbeiten
-
 - run.sh + stop.sh 
 - server heartbeat_grace -> 60sec ?
 - ServiceName RFC 1123
@@ -73,10 +72,22 @@
 - set_real_ip header aus nginx
 - Nginx Healthcheck
 
+- Service ports as in docker (docuemnted in nginx or api-gateway somwehere)
+- Fix Consul Connect sidecar GRPC TLS port 8503 / node IP 
+
 # TODO:
 sudo git pull origin master --rebase
 
-- Service ports as in docker (docuemnted in nginx or api-gateway somwehere)
+
+Prometheus / Grafana
+- Von Nomad & Consul verwaltet
+- User Managerment (admin + sevice oder anonym account "monitoring" mit nur lese  berechtigung (kein import kein panel change)
+- /data/container/prometheus
+- /data/container/grafana
+- 1 Woche Daten sammeln
+- 15 sec Scrape
+
+
 - ACLs aktiv setzen
 - Nginx Configs aus Image übernehmen oder Nginx Image übernehmen (`infrastructure/nginx-rewrite/config`)
     - Service-spezifische configs werden im Job künftig in die Alloc gemappt
@@ -138,11 +149,3 @@ sudo git pull origin master --rebase
     - Should clone the repo on the node instead, then reference files locally
     - Avoids broken downloads when files are added/moved and simplifies the download logic
 - Merge API-Gateway to main
-
-
-Prometheus / Grafana
-- User Managerment (admin + sevice oder anonym account "monitoring" mit nur lese  berechtigung (kein import kein panel change)
-- /data/container/prometheus
-- /data/container/grafana
-- 1 Woche Daten sammeln
-- 15 sec Scrape

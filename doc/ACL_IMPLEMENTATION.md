@@ -301,6 +301,43 @@ The script prompts for confirmation, then updates `default_policy` from `"allow"
 
 ---
 
+## Known Pitfall: `grpc_address` must be the node IP after ACL activation
+
+After ACL is activated, all Consul Connect sidecar bootstrap hooks will fail if
+`grpc_address` in `/etc/nomad.d/consul.hcl` is set to `127.0.0.1`.
+
+**Why**: Consul 1.22.3 automatically enables gRPC TLS (port 8503) when ACLs are active.
+The `consul connect envoy -bootstrap` command (run by Nomad's `envoy_bootstrap` prestart
+hook) detects the TLS requirement and derives the TLS endpoint from `grpc_address` by
+switching to port 8503. If `grpc_address` is `127.0.0.1:8502`, it tries TLS at
+`127.0.0.1:8503` — which fails because the auto-generated certificate does not cover the
+loopback address. Envoy never starts; all Connect-enabled jobs stop routing traffic.
+
+**Symptom**:
+```
+envoy_bootstrap: error creating bootstrap configuration for Connect proxy sidecar: exit status 1
+```
+Confirmed by running `consul connect envoy -bootstrap` manually:
+```
+TLS is enabled for xDS connections but no CA certificates are available.
+```
+
+**Fix**: `grpc_address = "${NODE_IP}:8502"` in `/etc/nomad.d/consul.hcl`. Both
+`setup_nomad.sh` and `apply_acl_config.sh` already write this correctly. For nodes set up
+before the fix was in place, patch in place and restart Nomad:
+```bash
+NODE_IP="$(ip route get 1 | awk '{print $7; exit}')"
+sudo sed -i "s|grpc_address = \"127.0.0.1:|grpc_address = \"${NODE_IP}:|" /etc/nomad.d/consul.hcl
+sudo systemctl restart nomad
+```
+Then restart all running jobs so they receive fresh NWI tokens (same as the post-bootstrap
+job restart requirement).
+
+See [CONNECT_SIDECAR_PITFALLS.md](CONNECT_SIDECAR_PITFALLS.md) for the full catalogue of
+Connect-related issues and [GRPC-ADDRESS-FIX.md](GRPC-ADDRESS-FIX.md) for migration details.
+
+---
+
 ## Recovery Procedures
 
 ### Nomad: Recovering a Lost Management Token

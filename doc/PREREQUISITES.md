@@ -42,8 +42,8 @@ The `NOMAD-CONSUL` security group (e.g. `sg-08e51d2a581377e0b`) must allow the p
 | 8301 | TCP + UDP | EC2 nodes (self) | Consul Serf LAN gossip (cluster membership) |
 | 8443 | TCP | Operator IPs | nginx/Traefik HTTPS rewriter (direct node access, not via ALB in POC) |
 | 8500 | TCP | Operator IPs | Consul HTTP API and UI |
-| 8502 | TCP | EC2 nodes (self) | Consul gRPC (plain) — kept for backwards compatibility; not used by Envoy xDS in Consul 1.14+ |
-| 8503 | TCP | EC2 nodes (self) | Consul gRPC TLS — Envoy xDS (required by Consul 1.14+; mandatory in 1.22+ for Connect sidecar bootstrap) |
+| 8502 | TCP | EC2 nodes (self) | Consul gRPC (plain) — target of Nomad's unix socket proxy (`alloc/tmp/consul_grpc.sock`); `grpc_address` in `/etc/nomad.d/consul.hcl` must be `NODE_IP:8502`, not `127.0.0.1:8502` (see CONNECT_SIDECAR_PITFALLS.md #1) |
+| 8503 | TCP | EC2 nodes (self) | Consul gRPC TLS — auto-enabled by Consul 1.22.3 when ACLs are active; the consul CLI switches to this port when it detects TLS is required, deriving the endpoint from `grpc_address` (host stays the same, port becomes 8503) |
 | 19000 | TCP | EC2 nodes (self) | Envoy admin API (API Gateway — only needed for debugging) |
 | 20000–32000 | TCP | EC2 nodes (self) | Dynamic Nomad allocation ports (Envoy sidecars, service health checks) |
 

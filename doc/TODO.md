@@ -72,8 +72,10 @@
 - set_real_ip header aus nginx
 - Nginx Healthcheck
 
-- Service ports as in docker (docuemnted in nginx or api-gateway somwehere)
-- Fix Consul Connect sidecar GRPC TLS port 8503 / node IP 
+- Service ports as in docker (as documented in in nginx)
+    -> from Docker-Compose
+    -> demo-service Port 20000
+- Fix Consul Connect sidecar ACL GRPC TLS auto port 8503 / node IP 
 
 # TODO:
 sudo git pull origin master --rebase
@@ -86,7 +88,9 @@ Prometheus / Grafana
 - /data/container/grafana
 - 1 Woche Daten sammeln
 - 15 sec Scrape
-
+- Image in Private Docker Registry ???
+- Promewtheus & Grafana sind beide HTTP native, kein HTTPS
+- kein Consul Monitoring im Moment
 
 - ACLs aktiv setzen
 - Nginx Configs aus Image übernehmen oder Nginx Image übernehmen (`infrastructure/nginx-rewrite/config`)

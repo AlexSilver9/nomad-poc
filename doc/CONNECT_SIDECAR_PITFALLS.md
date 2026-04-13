@@ -7,16 +7,29 @@ All of these must be addressed before deploying Connect sidecars or monitoring i
 
 ## 1. `grpc_address` in `consul.hcl` must be the node IP, not 127.0.0.1
 
-**Symptom**: All Connect sidecar proxies fail to connect to Consul xDS with:
+**Symptom**: After ACL activation, all Connect sidecar prestart hooks fail:
 ```
-DeltaAggregatedResources gRPC config stream to local_agent closed: 14,
-upstream connect error or disconnect/reset before headers. reset reason: connection termination
+envoy_bootstrap: error creating bootstrap configuration for Connect proxy sidecar: exit status 1
 ```
 
-**Root cause**: Nomad creates a unix socket (`alloc/tmp/consul_grpc.sock`) as a plain TCP proxy
-to the `grpc_address` configured in `consul.hcl`. Envoy sidecars connect through this socket.
-The socket is accessed from *inside* the bridge network namespace, where `127.0.0.1` is the
-container's own loopback — not the host. Consul is not listening there.
+The bootstrap JSON is never created, so Envoy never starts. Running `consul connect envoy -bootstrap`
+manually confirms the cause:
+```
+TLS is enabled for xDS connections but no CA certificates are available.
+Please configure CA certificates via -ca-file, -ca-path, or the corresponding config options
+```
+
+**Root cause**: Consul 1.22.3 automatically enables gRPC TLS (port 8503) when ACLs are active.
+Nomad's `envoy_bootstrap` prestart hook calls `consul connect envoy -bootstrap` with
+`-grpc-addr=unix://alloc/tmp/consul_grpc.sock` (a plain TCP unix socket proxying to `grpc_address`).
+The consul CLI detects that the server requires TLS for xDS connections and derives the TLS
+endpoint from `grpc_address` by switching to port 8503:
+
+- `127.0.0.1:8502` → consul CLI tries TLS at `127.0.0.1:8503` → no certificate for loopback → fails
+- `NODE_IP:8502` → consul CLI tries TLS at `NODE_IP:8503` → auto-generated cert covers real IP → succeeds
+
+This problem only appears after ACL activation. Without ACLs, gRPC TLS is not required and
+`127.0.0.1:8502` works fine.
 
 **Fix**: Use the node's primary IP:
 ```hcl
@@ -51,7 +64,7 @@ causes immediate connection termination.
 | Config location | Port | Reason |
 |---|---|---|
 | `consul.hcl` → `grpc_address` (Nomad's proxy) | **8502** | Plain TCP proxy, no TLS |
-| api-gateway job → `CONSUL_GRPC_ADDR` (consul CLI) | **8503** | CLI handles TLS itself |
+| api-gateway job → `CONSUL_GRPC_ADDR` (consul CLI) | **8502** | Bootstrap JSON uses plain HTTP/2 — see pitfall #3 |
 
 **Affects**: `setup_nomad.sh` / `setup_nomad_aws_ami.sh`, `bootstrap_acl.sh`, `apply_acl_config.sh`
 

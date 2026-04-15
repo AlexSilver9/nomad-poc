@@ -256,6 +256,7 @@ with open('/tmp/grafana-vars.hcl', 'w') as f:
 PYEOF
 
     ssh_exec "$FIRST_NODE" "NOMAD_TOKEN=${NOMAD_TOKEN:-} nomad job run -var-file=/tmp/grafana-vars.hcl infrastructure/grafana/job.nomad.hcl"
+    ssh_exec "$FIRST_NODE" "rm -f /tmp/grafana-vars.hcl"
 
     log_success "Grafana job submitted"
 

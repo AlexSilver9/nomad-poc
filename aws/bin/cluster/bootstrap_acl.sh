@@ -46,6 +46,67 @@ ssh_exec() {
   ssh $SSH_OPTS -i "$SSH_KEY" "${SSH_USER}@${node}" "$@"
 }
 
+# Transfer Consul or Nomad Raft leadership to BOOTSTRAP_NODE before bootstrapping.
+# This ensures the bootstrap RPC is processed by a node whose ACL config we control.
+#
+# Background: consul/nomad acl bootstrap RPCs are forwarded to the Raft leader.
+# The leader must have ACL enabled in its config; if it doesn't, the RPC returns
+# "ACL support disabled". Since Phase 0 enables ACL on all nodes via rolling restart,
+# leadership could end up on any node by the time bootstrap runs. Transferring to
+# BOOTSTRAP_NODE guarantees bootstrap lands on a known-good node.
+#
+# Usage: transfer_leader BOOTSTRAP_NODE NAME LIST_CMD TRANSFER_CMD_PREFIX
+#   LIST_CMD and TRANSFER_CMD_PREFIX are run on BOOTSTRAP_NODE via ssh_exec.
+#   TRANSFER_CMD_PREFIX is the command up to but not including the peer ID:
+#     Consul: "consul operator raft transfer-leader -id"
+#     Nomad:  "nomad operator raft transfer-leadership -peer-id"
+transfer_leader() {
+  local node="$1"
+  local name="$2"
+  local list_cmd="$3"
+  local transfer_prefix="$4"
+
+  local this_node peers_output leader_node this_id
+  this_node=$(ssh_exec "$node" "hostname -s")
+
+  peers_output=$(ssh_exec "$node" "$list_cmd")
+  # Node names may include a domain suffix (e.g. Nomad appends ".global").
+  # Strip from the first dot for comparison against hostname -s.
+  leader_node=$(echo "$peers_output" | awk '/leader/{split($1,p,"."); print p[1]}' | tr -d '[:space:]' || true)
+
+  if [[ -z "$leader_node" ]]; then
+    echo "  $name: could not determine leader — assuming single-node or already leader"
+    return
+  fi
+
+  if [[ "$leader_node" == "$this_node" ]]; then
+    echo "  $name leader: $this_node — no transfer needed"
+    return
+  fi
+
+  this_id=$(echo "$peers_output" | awk -v node="$this_node" '{split($1,p,"."); if(p[1]==node) print $2}' | tr -d '[:space:]')
+  if [[ -z "$this_id" ]]; then
+    echo "Error: could not find $name Raft peer ID for $this_node." >&2
+    exit 1
+  fi
+
+  echo "  $name leader is $leader_node — transferring to $this_node (id=$this_id)..."
+  ssh_exec "$node" "$transfer_prefix $this_id" || true
+
+  local i
+  for i in $(seq 1 15); do
+    sleep 1
+    leader_node=$(ssh_exec "$node" "$list_cmd" | awk '/leader/{split($1,p,"."); print p[1]}' | tr -d '[:space:]' || true)
+    if [[ "$leader_node" == "$this_node" ]]; then
+      echo "  $name leader: $this_node — transfer confirmed"
+      return
+    fi
+  done
+
+  echo "Error: $name leadership transfer did not complete within 15 seconds (current leader: $leader_node)." >&2
+  exit 1
+}
+
 # Bootstrap Consul ACL exactly once; handle "already done" and "ACL disabled" cases.
 # Prints the management token, or "<already-bootstrapped>" if already done.
 consul_bootstrap() {
@@ -150,15 +211,23 @@ for node in "${NODES[@]}"; do
   echo "    Restarting $node..."
   ssh_exec "$node" "sudo systemctl restart consul"
   for i in {1..12}; do
-    alive=$(ssh_exec "$BOOTSTRAP_NODE" "consul members | { grep -c alive || true; }" || echo 0)
-    if [[ "$alive" -ge "${#NODES[@]}" ]]; then
-      echo "    Rejoined ($alive/${#NODES[@]} alive)."
+    # /v1/status/peers does not require ACL authorization — avoids 403 errors during
+    # the brief window after restart while agents replicate ACL state from the leader.
+    peer_count=$(ssh_exec "$BOOTSTRAP_NODE" \
+      "curl -s http://localhost:8500/v1/status/peers | jq 'length'" || echo 0)
+    if [[ "$peer_count" -ge "${#NODES[@]}" ]]; then
+      echo "    Rejoined ($peer_count/${#NODES[@]} peers)."
       break
     fi
     [[ "$i" -eq 12 ]] && { echo "Error: $node did not rejoin Consul cluster after restart"; exit 1; }
     sleep 5
   done
 done
+
+echo "  Transferring Consul leadership to bootstrap node..."
+transfer_leader "$BOOTSTRAP_NODE" "Consul" \
+  "consul operator raft list-peers" \
+  "consul operator raft transfer-leader -id"
 
 for node in "${NODES[@]}"; do
   echo "  $node — writing /etc/nomad.d/acl.hcl"
@@ -214,8 +283,15 @@ if [[ "$CONSUL_MGMT_TOKEN" != "<already-bootstrapped>" ]]; then
   echo "  Applying Consul agent token to all nodes..."
   for node in "${NODES[@]}"; do
     echo "    $node"
-    ssh_exec "$node" \
-      "CONSUL_HTTP_TOKEN=$CONSUL_MGMT_TOKEN consul acl set-agent-token agent $CONSUL_AGENT_TOKEN"
+    for i in $(seq 1 12); do
+      if ssh_exec "$node" \
+        "CONSUL_HTTP_TOKEN=$CONSUL_MGMT_TOKEN consul acl set-agent-token agent $CONSUL_AGENT_TOKEN"; then
+        break
+      fi
+      [[ "$i" -eq 12 ]] && { echo "Error: failed to apply Consul agent token on $node after 12 attempts"; exit 1; }
+      echo "      ACL not ready yet, retrying... ($i/12)"
+      sleep 5
+    done
   done
 fi
 
@@ -285,6 +361,11 @@ for i in {1..12}; do
   sleep 5
 done
 
+echo "  Transferring Nomad leadership to bootstrap node..."
+transfer_leader "$BOOTSTRAP_NODE" "Nomad" \
+  "nomad operator raft list-peers" \
+  "nomad operator raft transfer-leadership -peer-id"
+
 fi  # end CONSUL_NOMAD_TOKEN guard
 
 # ─────────────────────────────────────────────────────────────
@@ -293,6 +374,16 @@ echo "Phase 3: Bootstrap Nomad ACL"
 echo "──────────────────────────────────────────────"
 
 NOMAD_MGMT_TOKEN=$(nomad_bootstrap "$BOOTSTRAP_NODE")
+
+# Partial re-run support: if bootstrap was already done in a previous run and the caller
+# exported a valid management token, use it so Phase 4 (NWI) can still proceed.
+if [[ "$NOMAD_MGMT_TOKEN" == "<already-bootstrapped>" && -n "${NOMAD_TOKEN:-}" ]]; then
+  NOMAD_MGMT_TOKEN="$NOMAD_TOKEN"
+fi
+
+if [[ "$CONSUL_MGMT_TOKEN" == "<already-bootstrapped>" && -n "${CONSUL_HTTP_TOKEN:-}" ]]; then
+  CONSUL_MGMT_TOKEN="$CONSUL_HTTP_TOKEN"
+fi
 
 if [[ "$NOMAD_MGMT_TOKEN" != "<already-bootstrapped>" ]]; then
   echo "  Nomad management token captured."

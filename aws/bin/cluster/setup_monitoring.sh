@@ -150,7 +150,7 @@ configure_nodes() {
     log_info "Waiting for Nomad cluster to recover..."
     local recovered=false
     for i in $(seq 1 15); do
-        if ssh_exec "$FIRST_NODE" "NOMAD_TOKEN=${NOMAD_TOKEN:-} nomad server members 2>/dev/null | grep -q alive"; then
+        if ssh_exec "$FIRST_NODE" "NOMAD_TOKEN=${NOMAD_TOKEN:-} nomad server members | { grep -q alive || true; }"; then
             log_success "Nomad cluster healthy"
             recovered=true
             break

@@ -71,28 +71,49 @@
 - Service Healthcheck auf na/ping, rest/ping status code 200
 - set_real_ip header aus nginx
 - Nginx Healthcheck
-
 - Service ports as in docker (as documented in in nginx)
     -> from Docker-Compose
-    -> demo-service Port 20000
-- Fix Consul Connect sidecar ACL GRPC TLS auto port 8503 / node IP 
-
-# TODO:
-sudo git pull origin master --rebase
-
+- Fix Consul Connect sidecar ACL GRPC TLS auto port 8503 / node IP
 
 Prometheus / Grafana
 - Von Nomad & Consul verwaltet
 - User Managerment (admin + sevice oder anonym account "monitoring" mit nur lese  berechtigung (kein import kein panel change)
-- /data/container/prometheus
-- /data/container/grafana
+    - admin
+    - editor
+    - viewer
+- /data/container/prometheus/
+- /data/container/grafana/
 - 1 Woche Daten sammeln
 - 15 sec Scrape
 - Image in Private Docker Registry ???
-- Promewtheus & Grafana sind beide HTTP native, kein HTTPS
+- Prometheus & Grafana sind beide HTTP native, kein HTTPS
 - kein Consul Monitoring im Moment
+- https://prometheus-staging.appservices.mitel.com:8443
+- https://grafana-staging.appservices.mitel.com:8443
 
 - ACLs aktiv setzen
+    - new Script: source_acl_tokens.sh
+- new script: redeploy_monitoring.sh (weil run.sh und stop.sh nicht auf infra arbeiten)
+
+
+# TODO:
+sudo git pull origin master --rebase
+
+- document Metrics Endpoint curl http://localhost:4646/v1/metrics?format=prometheus
+
+- demo-service Port 20022
+
+- cluster.env -> ENVIRONMENT Variablen setzen:
+    - ENVIRONMENT="STAGING" # TESTING, PRODUCTION
+    - DESCRIPTORS_DIR="/data..."
+    - document in SETUP.md
+
+- Liste mit allen URLs für Operating (Nomad UI, Consul UI, Prometheus, Grafana, etc..)
+- Alle Images mit fester Versionsnummer
+- Liste mit allen Images die verwendet werden (alpine, Prometheus, Grafana, etc...)
+
+- DEV Installation
+
 - Nginx Configs aus Image übernehmen oder Nginx Image übernehmen (`infrastructure/nginx-rewrite/config`)
     - Service-spezifische configs werden im Job künftig in die Alloc gemappt
     - TLSv1.2 + TLSv1.3 + Cipher Suites zentralisieren und aus den server blocks rausnehmen (eigenes Template)

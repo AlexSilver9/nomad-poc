@@ -132,6 +132,14 @@ consul acl token update -id=<token-accessor-id> -role-name=<new-role> ...
 
 ## Using Tokens
 
+To export tokens to shell environment vars without exposing them to shell history or output:
+
+```shell
+source ./aws/bin/cluster/source_acl_tokens.sh
+```
+
+This exports `CONSUL_HTTP_TOKEN` and `NOMAD_TOKEN` into the current shell.
+
 ### Consul CLI
 
 Set the token as an environment variable for an interactive session:
@@ -272,7 +280,40 @@ Management, agent, and Nomad server tokens are written to `aws/acl/bootstrap-out
 
 Run `create_user_tokens.sh` next to create roles and personal user tokens.
 
-If the script is run again after a successful bootstrap, the bootstrap steps are skipped (both `consul acl bootstrap` and `nomad acl bootstrap` detect the already-bootstrapped state and exit gracefully).
+### Verify bootstrap
+
+```shell
+cat aws/acl/bootstrap-output.txt
+# Should contain both === CONSUL TOKENS === and === NOMAD TOKENS === sections
+
+source ./aws/bin/cluster/source_acl_tokens.sh   # export CONSUL_HTTP_TOKEN and NOMAD_TOKEN
+
+CONSUL_HTTP_TOKEN=<mgmt> consul acl policy list    # agent, nomad-server, operator-readonly, operator-readwrite
+CONSUL_HTTP_TOKEN=<mgmt> consul acl token list     # agent token, nomad token (+ any user tokens)
+NOMAD_TOKEN=<mgmt> nomad acl policy list           # deployer, readonly, node-operator
+
+CONSUL_HTTP_TOKEN=<mgmt> consul acl auth-method list                           # nomad-workloads (jwt)
+CONSUL_HTTP_TOKEN=<mgmt> consul acl binding-rule list -method nomad-workloads  # 4 rules
+
+NOMAD_TOKEN=<mgmt> nomad status   # all jobs still running
+```
+
+For the Nomad UI: open `http://<node>:4646/ui/settings/tokens` and enter the Nomad management token to authenticate.
+
+### Partial re-run
+
+If the script fails partway through, re-run is safe — each phase detects its own prior state and skips it. To allow Phase 4 (NWI setup) to re-run when both bootstraps were already done, export the management tokens first:
+
+```shell
+source ./aws/bin/cluster/source_acl_tokens.sh   # prompts for tokens, exports them
+./aws/bin/cluster/bootstrap_acl.sh
+```
+
+If the Nomad management token was never written to `bootstrap-output.txt` (e.g. bootstrap was interrupted), recover it from your terminal history. Confirm it is still valid before re-running:
+
+```shell
+NOMAD_TOKEN=<secretid> nomad acl token self
+```
 
 ## Adding a New Node
 
@@ -286,8 +327,16 @@ The script prompts for the Consul agent token and the Nomad Consul token (both f
 
 1. Writes `/etc/consul.d/acl.hcl` and restarts Consul
 2. Applies the agent token via `consul acl set-agent-token`
-3. Writes `/etc/nomad.d/acl.hcl` and `/etc/nomad.d/consul-token.hcl`
+3. Writes `/etc/nomad.d/acl.hcl` and `/etc/nomad.d/consul.hcl` (with `address`, `grpc_address`, `token`, `service_identity`)
 4. Restarts Nomad
+
+Verify on the new node after running:
+
+```shell
+consul info | grep -A5 "acl"   # enabled = true
+consul members                  # all nodes visible, new node shows alive
+nomad server members            # all servers in cluster
+```
 
 ## Switching to Enforce Mode
 

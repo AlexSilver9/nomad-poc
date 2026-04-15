@@ -72,16 +72,26 @@ sudo systemctl restart consul
 
 echo "Waiting for Consul to rejoin cluster..."
 for i in {1..12}; do
-  if systemctl is-active --quiet consul; then
-    echo "  Consul is up."
+  # /v1/status/leader does not require ACL authorization — avoids 403 errors during
+  # the brief window after restart while the agent replicates ACL state from the leader.
+  leader=$(curl -s http://127.0.0.1:8500/v1/status/leader | tr -d '"[:space:]')
+  if [[ -n "$leader" ]]; then
+    echo "  Consul is up (leader: $leader)."
     break
   fi
-  [[ "$i" -eq 12 ]] && { echo "Error: Consul did not start in time"; exit 1; }
+  [[ "$i" -eq 12 ]] && { echo "Error: Consul did not come back after restart"; exit 1; }
   sleep 5
 done
 
 echo "Applying Consul agent token..."
-CONSUL_HTTP_TOKEN="$CONSUL_MGMT_TOKEN" consul acl set-agent-token agent "$CONSUL_AGENT_TOKEN"
+for i in $(seq 1 12); do
+  if CONSUL_HTTP_TOKEN="$CONSUL_MGMT_TOKEN" consul acl set-agent-token agent "$CONSUL_AGENT_TOKEN"; then
+    break
+  fi
+  [[ "$i" -eq 12 ]] && { echo "Error: failed to apply Consul agent token after 12 attempts"; exit 1; }
+  echo "  ACL not ready yet, retrying... ($i/12)"
+  sleep 5
+done
 
 echo "Writing /etc/nomad.d/acl.hcl..."
 sudo tee /etc/nomad.d/acl.hcl > /dev/null <<'HCLEOF'
@@ -91,13 +101,32 @@ acl {
 }
 HCLEOF
 
-echo "Writing /etc/nomad.d/consul-token.hcl..."
-sudo tee /etc/nomad.d/consul-token.hcl > /dev/null <<HCLEOF
-# Consul token for Nomad's Consul integration — written by apply_acl_tokens_to_node.sh
+# grpc_address: node IP + port 8502 (plain gRPC).
+# Node IP: Nomad creates a unix socket proxy to this address for Envoy sidecars.
+#   The socket is accessed from inside bridge network namespaces where 127.0.0.1
+#   is the container's own loopback — the node IP routes through the bridge to host.
+# Port 8502: Nomad's unix socket proxy is a plain TCP proxy (no TLS). Port 8503
+#   requires TLS; Consul terminates plain connections to it immediately.
+
+NODE_IP="$(/sbin/ip route get 1 | awk '{print $7; exit}')"
+
+echo "Writing /etc/nomad.d/consul.hcl..."
+sudo tee /etc/nomad.d/consul.hcl > /dev/null <<HCLEOF
+# Nomad-Consul integration — written by apply_acl_tokens_to_node.sh.
+# Single file avoids HCL merge issues across multiple consul{} blocks.
 consul {
-  token = "$NOMAD_CONSUL_TOKEN"
+  address      = "127.0.0.1:8500"
+  grpc_address = "${NODE_IP}:8502"
+  token        = "$NOMAD_CONSUL_TOKEN"
+
+  service_identity {
+    aud = ["consul.io"]
+    ttl = "1h"
+  }
 }
 HCLEOF
+# Remove legacy file if it exists from old installs
+sudo rm -f /etc/nomad.d/consul-token.hcl
 
 echo "Restarting Nomad..."
 sudo systemctl restart nomad
@@ -108,7 +137,7 @@ echo "Onboarding complete."
 echo "========================================="
 echo ""
 echo "Verify:"
+echo "  consul info | grep -A5 'acl'"
 echo "  consul members"
-echo "  consul acl token read -self"
-echo "  nomad node status -self"
+echo "  nomad server members"
 echo ""

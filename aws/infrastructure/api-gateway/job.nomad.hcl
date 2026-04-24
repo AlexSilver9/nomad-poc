@@ -66,12 +66,18 @@ job "api-gateway" {
       # NWI: Nomad writes the JWT to ${NOMAD_SECRETS_DIR}/consul_api_gateway.
       # The command below explicitly exchanges it for a Consul token via consul login.
       # Falls back gracefully (|| true) when ACL is not yet bootstrapped.
+      #
+      # change_mode = "restart": safe here because sidecar = true means the task is long-running.
+      # On JWT rotation (every 1h), Nomad restarts the sidecar container → re-runs consul login
+      # with a fresh JWT → re-registers the service. The api task (Envoy) is not restarted.
+      # NOTE: change_mode = "restart" with sidecar = false caused Alloc failures on JWT expiry
+      # (Nomad tried to restart an already-exited prestart task. That problem applies to one-shot sidecars only.)
       identity {
         name        = "consul_api_gateway"
         aud         = ["consul.io"]
         ttl         = "1h"
         env         = true         # Exposes JWT as NOMAD_TOKEN_consul_api_gateway env var
-        change_mode = "noop"       # Prestart task exits after setup; token rotation must not attempt a restart
+        change_mode = "restart"    # Restart sidecar on JWT rotation so it re-authenticates and re-registers.
       }
 
       config {
@@ -82,7 +88,16 @@ job "api-gateway" {
           join(" && ", [
             "echo \"$NOMAD_TOKEN_consul_api_gateway\" > ${NOMAD_SECRETS_DIR}/nwi.jwt && consul login -method nomad-workloads -bearer-token-file ${NOMAD_SECRETS_DIR}/nwi.jwt -token-sink-file ${NOMAD_ALLOC_DIR}/consul.token || true",
             "export CONSUL_HTTP_TOKEN=$(cat ${NOMAD_ALLOC_DIR}/consul.token || echo '')",
-            "consul connect envoy -gateway api -register -deregister-after-critical 10s -service ${NOMAD_JOB_NAME} -admin-bind 0.0.0.0:19000 -ignore-envoy-compatibility -bootstrap > ${NOMAD_ALLOC_DIR}/envoy_bootstrap.json"
+            # sleep 2: Consul leader is on a different node (e.g. node 3). consul login
+            # creates the token on the leader; on follower nodes the local ACL state machine
+            # may not have applied the new Raft entry yet. Without the sleep, consul connect
+            # envoy immediately uses the token and gets "ACL not found". 2 seconds give time for
+            # replication to complete. Only follower server nodes are affected; client-only
+            # nodes forward ACL validation to servers so they never see the stale state.
+            "sleep 2",
+            "consul connect envoy -gateway api -register -deregister-after-critical 10s -service ${NOMAD_JOB_NAME} -admin-bind 0.0.0.0:19000 -ignore-envoy-compatibility -bootstrap > ${NOMAD_ALLOC_DIR}/envoy_bootstrap.json",
+            # keep sidecar alive; Nomad restarts it on JWT rotation and allocation restore
+            "sleep infinity"
           ])
         ]
       }
@@ -112,12 +127,14 @@ job "api-gateway" {
       driver = "docker"
 
       config {
-        image = "envoyproxy/envoy:v1.35.8"
+        image   = "envoyproxy/envoy:v1.35.8"
+        command = "/bin/sh"
         args = [
-          "--config-path", "${NOMAD_ALLOC_DIR}/envoy_bootstrap.json",
-          "--log-level", "info",
-          "--concurrency", "2",
-          "--disable-hot-restart"
+          "-c",
+          # Wait for setup sidecar to write bootstrap.json before starting Envoy.
+          # On allocation restore, bootstrap.json from the previous run is already present
+          # so the wait exits immediately. On first start, setup sidecar writes it within some seconds.
+          "until [ -s ${NOMAD_ALLOC_DIR}/envoy_bootstrap.json ]; do sleep 1; done && exec envoy --config-path ${NOMAD_ALLOC_DIR}/envoy_bootstrap.json --log-level info --concurrency 2 --disable-hot-restart"
         ]
       }
 

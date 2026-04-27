@@ -207,6 +207,13 @@ client {
 ${servers}
   ]
 
+  # Reserve resources for OS/system — not available to jobs.
+  reserved {
+    cpu    = 100   # MHz
+    memory = 128   # MB
+    disk   = 128   # MB
+  }
+
   host_volume "data" {
     path      = "/data"
     read_only = false

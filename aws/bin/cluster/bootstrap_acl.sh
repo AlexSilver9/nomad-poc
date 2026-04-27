@@ -361,11 +361,6 @@ for i in {1..12}; do
   sleep 5
 done
 
-echo "  Transferring Nomad leadership to bootstrap node..."
-transfer_leader "$BOOTSTRAP_NODE" "Nomad" \
-  "nomad operator raft list-peers" \
-  "nomad operator raft transfer-leadership -peer-id"
-
 fi  # end CONSUL_NOMAD_TOKEN guard
 
 # ─────────────────────────────────────────────────────────────

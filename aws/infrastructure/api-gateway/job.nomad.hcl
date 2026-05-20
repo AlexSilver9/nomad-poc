@@ -60,7 +60,8 @@ job "api-gateway" {
 
       lifecycle {
         hook    = "prestart"
-        sidecar = false
+        # persistent: re-runs on every allocation restore (including node reboots), keeping Consul registration alive
+        sidecar = true
       }
 
       # NWI: Nomad writes the JWT to ${NOMAD_SECRETS_DIR}/consul_api_gateway.

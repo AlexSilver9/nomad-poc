@@ -96,7 +96,7 @@ job "api-gateway" {
             # replication to complete. Only follower server nodes are affected; client-only
             # nodes forward ACL validation to servers so they never see the stale state.
             "sleep 2",
-            "consul connect envoy -gateway api -register -deregister-after-critical 10s -service ${NOMAD_JOB_NAME} -admin-bind 0.0.0.0:19000 -ignore-envoy-compatibility -bootstrap > ${NOMAD_ALLOC_DIR}/envoy_bootstrap.json",
+            "consul connect envoy -gateway api -register -deregister-after-critical 10s -service ${NOMAD_JOB_NAME} -admin-bind 0.0.0.0:19000 -bootstrap > ${NOMAD_ALLOC_DIR}/envoy_bootstrap.json",
             # keep sidecar alive; Nomad restarts it on JWT rotation and allocation restore
             "sleep infinity"
           ])

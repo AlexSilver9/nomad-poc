@@ -10,7 +10,7 @@ set -euo pipefail
 # Usage from repo:
 #   curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/AlexSilver9/nomad-poc/refs/heads/main/aws/bin/instance/setup_nomad_client.sh | sh
 
-NOMAD_VERSION="1.11.2-1"
+NOMAD_VERSION="2.0.0-1"
 CNI_VERSION="v1.4.0"
 ADD_USER_TO_DOCKER="${ADD_USER_TO_DOCKER:-}"  # Set to "yes" for non-interactive mode
 

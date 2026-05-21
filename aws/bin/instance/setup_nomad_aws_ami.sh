@@ -12,7 +12,7 @@ set -euo pipefail
 
 # Variables
 NOMAD_SYSTEMD_CONFIG="/usr/lib/systemd/system/nomad.service"
-NOMAD_VERSION="1.11.2-1"
+NOMAD_VERSION="2.0.0-1"
 CNI_VERSION="v1.4.0"
 ADD_USER_TO_DOCKER="${ADD_USER_TO_DOCKER:-}"  # Set to "yes" for non-interactive mode
 

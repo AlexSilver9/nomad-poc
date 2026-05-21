@@ -82,7 +82,7 @@ job "api-gateway" {
       }
 
       config {
-        image   = "hashicorp/consul:1.22.3"
+        image   = "hashicorp/consul:1.22.7"
         command = "/bin/sh"
         args = [
           "-c",

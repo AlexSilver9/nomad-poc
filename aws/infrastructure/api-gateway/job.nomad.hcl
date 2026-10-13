@@ -82,7 +82,7 @@ job "api-gateway" {
       }
 
       config {
-        image   = "hashicorp/consul:1.22.7"
+        image   = "hashicorp/consul:2.0.4"
         command = "/bin/sh"
         args = [
           "-c",
@@ -128,7 +128,7 @@ job "api-gateway" {
       driver = "docker"
 
       config {
-        image   = "envoyproxy/envoy:v1.35.8"
+        image   = "envoyproxy/envoy:v1.38.7"
         command = "/bin/sh"
         args = [
           "-c",

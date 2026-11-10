@@ -188,6 +188,11 @@ nomad alloc logs <alloc-id> api     # Envoy logs
 nomad alloc logs <alloc-id> setup   # setup task logs (NWI login, bootstrap)
 ```
 
+## Known issues
+
+- [ROUTING_TROUBLESHOOTING.md](ROUTING_TROUBLESHOOTING.md) — service deployed but not reachable: layer-by-layer diagnostic guide
+- [API_GATEWAY_ACL_NOT_FOUND.md](API_GATEWAY_ACL_NOT_FOUND.md) — setup task fails with "ACL not found" on Raft follower nodes after NWI login
+
 ## ACL and Nomad Workload Identity
 
 When Consul ACL is in deny mode, the `setup` task must present a valid Consul token to

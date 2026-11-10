@@ -8,6 +8,9 @@ For background on why the steps are structured this way, see:
 - [API_GATEWAY.md](API_GATEWAY.md) — API Gateway internals and URL rewrite details
 - [FILE_ORGANIZATION.md](FILE_ORGANIZATION.md) — where to put each file
 
+If the service is deployed but not reachable after onboarding, see:
+- [ROUTING_TROUBLESHOOTING.md](ROUTING_TROUBLESHOOTING.md)
+
 ---
 
 ## Infrastructure implications at a glance
@@ -116,3 +119,24 @@ nomad job run infrastructure/nginx-rewrite/job.nomad.hcl   # or traefik-rewrite
 **Connection impact**: redeploying `api-gateway` and the rewriter as system jobs causes a
 brief interruption for **all services**, not just the new one. Plan this as a short
 maintenance window.
+
+---
+
+## Services with host-mode networking and static ports
+
+Some services (e.g. vsftp) cannot use Consul Connect because their protocol requires multiple
+connections or direct port access. These jobs use `network { mode = "host" }` and declare
+all ports as `static`.
+
+No Consul config entries or API Gateway changes are needed — the service registers directly
+with Consul for health checks only.
+
+### Static port constraint
+
+Nomad's dynamic port allocator uses the range **30000–60000** (configured via
+`NOMAD_MIN_DYNAMIC_PORT` / `NOMAD_MAX_DYNAMIC_PORT` in `cluster.env`). Static ports for
+jobs must be **below 30000** to avoid collisions with dynamically assigned ports.
+
+If a job requires a static port in the 30000–60000 range, raise `NOMAD_MIN_DYNAMIC_PORT`
+in `cluster.env`, then re-run `setup_nomad.sh` on each node (drain → update config →
+restart nomad → re-enable).

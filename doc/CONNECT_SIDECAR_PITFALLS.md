@@ -205,6 +205,13 @@ deployments the database persists across redeploys.
 
 ---
 
+## Related
+
+- [API_GATEWAY_ACL_NOT_FOUND.md](API_GATEWAY_ACL_NOT_FOUND.md) — "ACL not found" on api-gateway setup task on Raft follower nodes (Raft timing race after NWI login)
+- [CONNECT_UPSTREAM_TROUBLESHOOTING.md](CONNECT_UPSTREAM_TROUBLESHOOTING.md) — service gets `Connection refused` on upstream port: upstream listener missing from Envoy (proxy registered without upstreams)
+
+---
+
 ## Production checklist
 
 Before enabling ACL and deploying monitoring in production, verify:

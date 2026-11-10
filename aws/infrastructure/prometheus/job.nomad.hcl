@@ -51,7 +51,7 @@ job "prometheus" {
       driver = "docker"
 
       config {
-        image = "prom/prometheus:v3.2.1"
+        image = "prom/prometheus:v3.15.0"
 
         args = [
           "--config.file=/local/prometheus.yml",

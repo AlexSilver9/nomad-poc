@@ -44,6 +44,7 @@ aws/
 │       ├── canary_update.sh                # Demo: canary deployment
 │       ├── rolling_update.sh               # Demo: rolling update deployment
 │       ├── sensitive_service.sh            # Demo: sensitive service on isolated node pool
+│       ├── hazelcast_mesh.sh               # POC: Hazelcast cluster via Consul mesh (requires enforced ACLs)
 │       └── node_drain.sh                   # Demo: graceful node drain
 ├── acl/                                    # ACL policies and roles (tokens never committed)
 ├── infrastructure/                         # Platform/infrastructure components
@@ -82,11 +83,18 @@ aws/
     │   ├── job.nomad.hcl
     │   ├── defaults.consul.hcl
     │   └── intentions.consul.hcl
-    └── sensitive-service/
-        ├── job.nomad.hcl                   # Runs on sensitive-node-pool
-        ├── defaults.consul.hcl
-        ├── intentions.consul.hcl
-        └── node-pool.nomad.hcl             # Nomad node pool definition
+    ├── sensitive-service/
+    │   ├── job.nomad.hcl                   # Runs on sensitive-node-pool
+    │   ├── defaults.consul.hcl
+    │   ├── intentions.consul.hcl
+    │   └── node-pool.nomad.hcl             # Nomad node pool definition
+    └── hazelcast-mesh-service/             # See doc/HAZELCAST_MESH.md
+        ├── job.nomad.hcl                   # App + Hazelcast member, per-member mesh upstreams
+        ├── defaults.consul.hcl             # service-defaults for <svc>-hz (tcp)
+        ├── defaults-app.consul.hcl         # service-defaults for the app service (http)
+        ├── intentions.consul.hcl           # <svc>-hz → <svc>-hz allow
+        ├── resolver.consul.hcl             # service-resolver: one subset per member ordinal
+        └── resolver-member-<N>.consul.hcl  # service-resolver: virtual name <svc>-hz-<N> → subset member-<N>
 ```
 
 ## File Naming Convention
@@ -97,6 +105,7 @@ aws/
 | `gateway.consul.hcl`     | Consul | api-gateway config entry (listeners)                 |
 | `defaults.consul.hcl`    | Consul | service-defaults config entry                        |
 | `router.consul.hcl`      | Consul | service-router config entry (east-west only)         |
+| `resolver*.consul.hcl`   | Consul | service-resolver config entry (subsets, redirects)   |
 | `intentions.consul.hcl`  | Consul | service-intentions config entry                      |
 | `node-pool.nomad.hcl`    | Nomad  | Node pool definition                                 |
 | `route.consul.hcl`       | Consul | http-route or tcp-route (north-south routing via API Gateway) |

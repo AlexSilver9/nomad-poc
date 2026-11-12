@@ -575,6 +575,7 @@ download_additional_scripts() {
         node_drain.sh
         eval_system_jobs.sh
         file_service.sh
+        hazelcast_mesh.sh
         apply_acl_tokens_to_node.sh
         create_user_tokens.sh
         revoke_consul_user_tokens.sh

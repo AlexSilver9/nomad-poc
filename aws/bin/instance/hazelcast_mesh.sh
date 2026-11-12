@@ -52,12 +52,20 @@ running_allocs() {
 }
 
 # Prints "<alloc> <health json>" per running alloc
+# nomad alloc exec occasionally returns empty output - retry up to 3 times, 15s timeout each.
 cluster_health() {
-  local alloc
+  local alloc out
   while IFS= read -r alloc; do
     [[ -z "$alloc" ]] && continue
-    echo "${alloc:0:8} $(nomad alloc exec -i=false -t=false -task hazelcast "$alloc" \
-      curl -s --max-time 3 http://127.0.0.1:5701/hazelcast/health || echo '{"error":"unreachable"}')"
+    out=""
+    for _ in 1 2 3; do
+      out=$(timeout 15 nomad alloc exec -i=false -t=false -task hazelcast "$alloc" \
+        curl -s --max-time 3 http://127.0.0.1:5701/hazelcast/health < /dev/null || true)
+      [[ -n "$out" ]] && break
+      sleep 2
+    done
+    [[ -n "$out" ]] || out='{"error":"unreachable"}'
+    echo "${alloc:0:8} $out"
   done < <(running_allocs)
 }
 
@@ -137,9 +145,13 @@ ROGUE_CFG=$(mktemp)
 chmod 644 "$ROGUE_CFG"
 
 sudo docker rm -f "$ROGUE_NAME" &>/dev/null || true
+# Memory limit is essential: without it the JVM sizes its heap from the NODE's total RAM
+# (MaxRAMPercentage=80) and starves Consul/Nomad servers on this node.
 sudo docker run -d --name "$ROGUE_NAME" --network host \
+  --memory 320m \
   -v "$ROGUE_CFG:/opt/hazelcast/config/rogue.yaml:ro" \
   -e HAZELCAST_CONFIG=/opt/hazelcast/config/rogue.yaml \
+  -e JAVA_OPTS="-XX:MaxRAMPercentage=50" \
   hazelcast/hazelcast:5.5.0 >/dev/null
 echo "Rogue member started, waiting 45s for join attempts..."
 sleep 45

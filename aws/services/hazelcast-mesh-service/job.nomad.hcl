@@ -97,6 +97,14 @@ job "hazelcast-mesh-service" {
             local_service_port = 8080
           }
         }
+        # Nomad's default sidecar resources (cpu 250, memory 300) are far too large - with two
+        # sidecars per alloc they alone would need 600 MB per alloc.
+        sidecar_task {
+          resources {
+            cpu    = 50
+            memory = 48
+          }
+        }
       }
     }
 
@@ -170,6 +178,12 @@ job "hazelcast-mesh-service" {
             }
           }
         }
+        sidecar_task {
+          resources {
+            cpu    = 50
+            memory = 48
+          }
+        }
       }
     }
 
@@ -206,7 +220,9 @@ job "hazelcast-mesh-service" {
       env {
         HAZELCAST_CONFIG = "/opt/hazelcast/config/hazelcast-mesh.yaml"
         # GRACEFUL: migrate owned partitions to other members before shutdown (rolling updates)
-        JAVA_OPTS = "-Dhazelcast.shutdownhook.policy=GRACEFUL -Dhazelcast.graceful.shutdown.max.wait=25"
+        # MaxRAMPercentage=50 overrides the image default (80): heap ~160 MB, leaving room for
+        # metaspace/threads within the 320 MB container limit (avoids OOM kills).
+        JAVA_OPTS = "-XX:MaxRAMPercentage=50 -Dhazelcast.shutdownhook.policy=GRACEFUL -Dhazelcast.graceful.shutdown.max.wait=25"
         REVISION  = var.revision
       }
 
@@ -242,9 +258,11 @@ hazelcast:
 EOF
       }
 
+      # Sized for the POC nodes (~540 MB free each, one alloc per node):
+      # app 32 + hazelcast 320 + 2 sidecars × 48 = 448 MB per alloc.
       resources {
         cpu    = 300
-        memory = 512
+        memory = 320
       }
     }
   }

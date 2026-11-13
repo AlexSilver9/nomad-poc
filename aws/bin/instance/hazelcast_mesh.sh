@@ -8,7 +8,7 @@ set -euo pipefail
 #   1. Nomad accepts two Connect services (app + hz) in one task group
 #   2. Redirect-only service-resolvers work for unregistered virtual names (hz-0..hz-2)
 #   3. All members form one cluster (clusterSize = 3) via mesh upstreams
-#   4. A rogue Hazelcast member (plain TCP, no mesh cert) cannot join
+#   4. Clients outside the mesh (no Consul-issued cert) cannot reach Hazelcast
 #   5. A member that restarts while the intention denies cannot rejoin; it can after re-allowing
 #   6. A rolling update keeps the cluster intact
 #
@@ -31,7 +31,6 @@ MEMBERS=3
 CONSUL_ADDR="${CONSUL_HTTP_ADDR:-http://127.0.0.1:8500}"
 CONSUL_ADDR="${CONSUL_ADDR#http://}"
 CONSUL_ADDR="http://${CONSUL_ADDR}"
-ROGUE_NAME="hz-rogue"
 
 [[ -n "${NOMAD_TOKEN:-}" ]]       || { echo "Error: NOMAD_TOKEN not set"; exit 1; }
 [[ -n "${CONSUL_HTTP_TOKEN:-}" ]] || { echo "Error: CONSUL_HTTP_TOKEN not set"; exit 1; }
@@ -52,14 +51,15 @@ running_allocs() {
 }
 
 # Prints "<alloc> <health json>" per running alloc
-# nomad alloc exec occasionally returns empty output - retry up to 3 times, 15s timeout each.
+# nomad alloc exec occasionally returns empty output or hangs - retry up to 3 times, 15s timeout
+# each. -k 5: the nomad CLI traps SIGTERM (forwards it to the remote command), so escalate to SIGKILL.
 cluster_health() {
   local alloc out
   while IFS= read -r alloc; do
     [[ -z "$alloc" ]] && continue
     out=""
     for _ in 1 2 3; do
-      out=$(timeout 15 nomad alloc exec -i=false -t=false -task hazelcast "$alloc" \
+      out=$(timeout -k 5 15 nomad alloc exec -i=false -t=false -task hazelcast "$alloc" \
         curl -s --max-time 3 http://127.0.0.1:5701/hazelcast/health < /dev/null || true)
       [[ -n "$out" ]] && break
       sleep 2
@@ -118,50 +118,43 @@ echo ""
 echo "Member list of one alloc (all addresses must be 127.0.0.1:157xx):"
 nomad alloc logs -task hazelcast "$(running_allocs | sed -n 1p)" | grep -A$((MEMBERS + 1)) 'Members {size' | tail -$((MEMBERS + 2)) || true
 
-read -rp "Press Enter to run the rogue member test..."
+read -rp "Press Enter to run the rogue client test..."
 
-# Step 5: Rogue member - plain Hazelcast pointed at the sidecars' public mTLS listeners.
-# 5701 is not published on the host, so the sidecar listener is the only reachable entry point.
-echo "=== STEP 5: Rogue member must NOT be able to join ==="
+# Step 5: Rogue client - probes everything a rogue Hazelcast member would depend on.
+# No real rogue Hazelcast JVM: after the job is placed the POC nodes have < 100 MB free, and an
+# extra JVM outside Nomad's resource accounting exhausts the node (Docker, Consul and Nomad hang).
+echo "=== STEP 5: Clients outside the mesh must NOT reach Hazelcast ==="
 SIDECAR_ADDRS=$(curl -s -H "X-Consul-Token: $CONSUL_HTTP_TOKEN" "$CONSUL_ADDR/v1/health/connect/$HZ_SVC" \
   | jq -r '.[] | "\(.Service.Address):\(.Service.Port)"')
 echo "Sidecar public listeners:"
 echo "$SIDECAR_ADDRS" | sed 's/^/  /'
 
-ROGUE_CFG=$(mktemp)
-{
-  echo "hazelcast:"
-  echo "  cluster-name: hazelcast-mesh-service"
-  echo "  network:"
-  echo "    port: {port: 5799, auto-increment: false}"
-  echo "    join:"
-  echo "      auto-detection: {enabled: false}"
-  echo "      multicast: {enabled: false}"
-  echo "      tcp-ip:"
-  echo "        enabled: true"
-  echo "        member-list:"
-  echo "$SIDECAR_ADDRS" | sed 's/^/          - /'
-} > "$ROGUE_CFG"
-chmod 644 "$ROGUE_CFG"
+echo ""
+echo "a) Hazelcast port 5701 on the node IPs (expected: refused - not published on the host)"
+while IFS=: read -r host _; do
+  if timeout 3 bash -c "exec 3<>/dev/tcp/$host/5701" 2>&1; then
+    echo "  FAIL: $host:5701 accepts connections"
+  else
+    echo "  PASS: $host:5701 not reachable"
+  fi
+done <<< "$SIDECAR_ADDRS"
 
-sudo docker rm -f "$ROGUE_NAME" &>/dev/null || true
-# Memory limit is essential: without it the JVM sizes its heap from the NODE's total RAM
-# (MaxRAMPercentage=80) and starves Consul/Nomad servers on this node.
-sudo docker run -d --name "$ROGUE_NAME" --network host \
-  --memory 320m \
-  -v "$ROGUE_CFG:/opt/hazelcast/config/rogue.yaml:ro" \
-  -e HAZELCAST_CONFIG=/opt/hazelcast/config/rogue.yaml \
-  -e JAVA_OPTS="-XX:MaxRAMPercentage=50" \
-  hazelcast/hazelcast:5.5.0 >/dev/null
-echo "Rogue member started, waiting 45s for join attempts..."
-sleep 45
+echo ""
+echo "b) Plain TCP Hazelcast handshake ('HZC') to the sidecars (expected: 0 bytes answered)"
+while IFS=: read -r host port; do
+  bytes=$(timeout 5 bash -c "exec 3<>/dev/tcp/$host/$port; printf 'HZC' >&3; cat <&3" | wc -c || true)
+  if [[ "$bytes" -eq 0 ]]; then echo "  PASS: $host:$port no answer"; else echo "  FAIL: $host:$port answered $bytes bytes"; fi
+done <<< "$SIDECAR_ADDRS"
 
-echo "Rogue member log (expected: connection errors, standalone cluster of size 1):"
-sudo docker logs "$ROGUE_NAME" 2>&1 | grep -E 'Members \{size|Connection|SSL|closed|refused' | tail -10 || true
+echo ""
+echo "c) TLS without a mesh client cert (expected: handshake failure / 'certificate required' alert)"
+while IFS= read -r addr; do
+  echo "  --- $addr"
+  timeout 10 openssl s_client -connect "$addr" -brief < /dev/null 2>&1 | tail -4 | sed 's/^/    /' || true
+done <<< "$SIDECAR_ADDRS"
+
 echo ""
 expect_cluster_size "$MEMBERS" || true
-sudo docker rm -f "$ROGUE_NAME" >/dev/null
-rm -f "$ROGUE_CFG"
 
 read -rp "Press Enter to run the intention deny test..."
 

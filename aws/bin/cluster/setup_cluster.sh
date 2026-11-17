@@ -576,6 +576,8 @@ download_additional_scripts() {
         eval_system_jobs.sh
         file_service.sh
         hazelcast_mesh.sh
+        sticky_nginx_direct.sh
+        sticky_gateway_ordinal.sh
         apply_acl_tokens_to_node.sh
         create_user_tokens.sh
         revoke_consul_user_tokens.sh

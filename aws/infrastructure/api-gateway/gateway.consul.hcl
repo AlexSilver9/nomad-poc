@@ -24,5 +24,19 @@ Listeners = [
     Name     = "https-service"
     Port     = 8082
     Protocol = "tcp"
+  },
+
+  # Sticky sessions POC, Option B (doc/STICKY_SESSIONS.md): one TCP listener per INSTANCE of
+  # sticky-https-service, so nginx can pin a client to one instance. Routes:
+  # services/sticky-https-service/route-instance-<N>.consul.hcl
+  {
+    Name     = "sticky-https-service-0"
+    Port     = 8083
+    Protocol = "tcp"
+  },
+  {
+    Name     = "sticky-https-service-1"
+    Port     = 8084
+    Protocol = "tcp"
   }
 ]

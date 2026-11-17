@@ -45,6 +45,8 @@ aws/
 │       ├── rolling_update.sh               # Demo: rolling update deployment
 │       ├── sensitive_service.sh            # Demo: sensitive service on isolated node pool
 │       ├── hazelcast_mesh.sh               # POC: Hazelcast cluster via Consul mesh (requires enforced ACLs)
+│       ├── sticky_nginx_direct.sh          # POC: sticky sessions Option A (nginx → instances directly)
+│       ├── sticky_gateway_ordinal.sh       # POC: sticky sessions Option B (nginx → gateway port per instance)
 │       └── node_drain.sh                   # Demo: graceful node drain
 ├── acl/                                    # ACL policies and roles (tokens never committed)
 ├── infrastructure/                         # Platform/infrastructure components
@@ -88,6 +90,15 @@ aws/
     │   ├── defaults.consul.hcl
     │   ├── intentions.consul.hcl
     │   └── node-pool.nomad.hcl             # Nomad node pool definition
+    ├── sticky-https-service/               # See doc/STICKY_SESSIONS.md
+    │   ├── job.nomad.hcl                   # 2× HTTPS instance (stands in for Payara), ordinal tags
+    │   ├── defaults.consul.hcl             # Protocol tcp (HTTPS-native)
+    │   ├── nginx-a.nomad.hcl               # Option A: nginx-rewrite test variant (instances from Consul)
+    │   ├── nginx-b.nomad.hcl               # Option B: nginx-rewrite test variant (gateway port per instance)
+    │   ├── intentions.consul.hcl           # api-gateway → service allow (Option B)
+    │   ├── resolver.consul.hcl             # Option B: one subset per instance ordinal
+    │   ├── resolver-instance-<N>.consul.hcl # Option B: virtual name <svc>-<N> → subset ordinal-<N>
+    │   └── route-instance-<N>.consul.hcl   # Option B: tcp-route gateway listener <svc>-<N> → <svc>-<N>
     └── hazelcast-mesh-service/             # See doc/HAZELCAST_MESH.md
         ├── job.nomad.hcl                   # App + Hazelcast member, per-member mesh upstreams
         ├── defaults.consul.hcl             # service-defaults for <svc>-hz (tcp)

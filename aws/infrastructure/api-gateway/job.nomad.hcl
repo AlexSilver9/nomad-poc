@@ -51,6 +51,17 @@ job "api-gateway" {
         static = 8082
         to     = 8082
       }
+
+      # Sticky sessions POC, Option B: one TCP listener per instance of sticky-https-service
+      # (see gateway.consul.hcl)
+      port "sticky-https-service-0" {
+        static = 8083
+        to     = 8083
+      }
+      port "sticky-https-service-1" {
+        static = 8084
+        to     = 8084
+      }
     }
 
     # setup: registers the gateway with Consul and writes the Envoy bootstrap config to

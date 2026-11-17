@@ -235,7 +235,7 @@ re-registers. The `api` task is not affected.
 
 ## Investigation path that led to the fix
 
-1. Customer reported `connect() failed (111: Connection refused)` on upstream port 20002
+1. Reported: `connect() failed (111: Connection refused)` on upstream port 20002
    after a node restart. The Nomad job appeared healthy.
 
 2. Checked nginx — nginx itself was running and its upstream config was correct.

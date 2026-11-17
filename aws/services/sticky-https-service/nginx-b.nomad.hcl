@@ -1,5 +1,5 @@
 # Sticky sessions POC, Option B (doc/STICKY_SESSIONS.md): nginx addresses each instance via its OWN
-# API Gateway TCP port (static config, no Consul access - like the production nginx).
+# API Gateway TCP port (static config, no Consul access).
 #
 #   client → nginx :8443 (TLS termination, STICKY_ROUTE cookie, hash consistent)
 #          → API Gateway :8083 / :8084 → mTLS → instance 0 / 1

@@ -212,10 +212,10 @@ printf '%s\n' "${CLIENT_INSTANCES[@]}" | sort | uniq -c | sed 's/^/  /'
 read -rp "Press Enter to run the failover test (stops one instance)..."
 
 # Step 8: Stop the instance of client 1. Expected:
-#   - client 1 fails over to the other instance (in production: new login)
+#   - client 1 fails over to the other instance (real app: new login)
 #   - clients of the other instance stay - also when the replacement comes back: it gets the same
 #     ordinal → same gateway port → nginx's hash ring never changes
-#   - client 1 returns to the replacement once it is healthy (in production: second login)
+#   - client 1 returns to the replacement once it is healthy (real app: second login)
 echo "=== STEP 8: Failover ==="
 VICTIM_INSTANCE="${CLIENT_INSTANCES[0]}"
 VICTIM_INDEX=$(sed -nE 's/^sticky-([0-9]+)\/.*/\1/p' <<< "$VICTIM_INSTANCE")
@@ -242,7 +242,7 @@ for i in $(seq 1 30); do
   sleep 3
 done
 echo ""
-echo "After failover - all clients (moved = session lost in production):"
+echo "After failover - all clients (moved = session lost in a real app):"
 for c in "${!CLIENT_COOKIES[@]}"; do
   now=$(request "$(node "$c")" "${CLIENT_COOKIES[$c]}" | cut -d' ' -f1)
   mark="stayed"; [[ "$now" != "${CLIENT_INSTANCES[$c]}" ]] && mark="MOVED"

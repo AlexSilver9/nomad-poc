@@ -171,7 +171,7 @@ Neither option shares sessions — a user whose instance goes away has to log in
 | Instance count | Free (template follows) | Fixed |
 | Users of the surviving instance on failover | Partly logged out when the replacement returns | Never logged out |
 | Removal | Revert nginx template | Revert gateway listeners + config entries |
-| Uncertainty | Consul token for the nginx template | API Gateway `tcp-route` to a virtual service (accepted + bound on Consul 2.0.4 dev agent; runtime pending) |
+| Verified on POC cluster | ✅ incl. Consul token for the nginx template | ✅ incl. API Gateway `tcp-route` to a virtual service |
 
 ---
 
@@ -230,8 +230,41 @@ Both require `NOMAD_TOKEN` and `CONSUL_HTTP_TOKEN`; B requires enforced ACLs (in
 | nginx cookie + hash: Set-Cookie on first request only, 6 clients sticky, failover without errors, return after recovery | ✅ locally (Docker, 2 HTTPS backends) |
 | Nomad 2.0.7: all jobs validate + plan | ✅ locally |
 | Consul 2.0.4: `tcp-route` to virtual service accepted + bound; chain → single subset `ordinal-N`, tcp, OnlyPassing | ✅ dev agent |
-| POC cluster: Option A (`sticky_nginx_direct.sh`) | ⏳ |
-| POC cluster: Option B (`sticky_gateway_ordinal.sh`) | ⏳ |
+| POC cluster: Option A (`sticky_nginx_direct.sh`) | ✅ Nomad 2.0.7 / Consul 2.0.4, ACLs enforced — see [Option A results](#option-a-results) |
+| POC cluster: Option B (`sticky_gateway_ordinal.sh`) | ✅ Nomad 2.0.7 / Consul 2.0.4, ACLs enforced — see [Option B results](#option-b-results) |
+
+### Option A results
+
+Two runs.
+
+| Check | Result |
+|---|---|
+| Consul token via `identity { name = "consul_default" }` | ✅ Template rendered both instances on all 3 nginx nodes (no `down` fallback) |
+| Set-Cookie on first request | ✅ 8/8 requests without cookie got `STICKY_ROUTE`, spread over both instances |
+| Stickiness across nodes | ✅ 6/6 clients hit one instance for all 9 requests, rotating over 3 nginx nodes (both runs) |
+| Instance stopped | ✅ Its clients served by the other instance on the next request (≤ 3 s), no errors |
+| Users of the surviving instance during the outage | ✅ Stayed |
+| Replacement back (~12–18 s later, new host port) | ⚠️ As predicted: the hash ring changes, so the result depends on where the new address lands. Run 1: 0 of 3 survivor clients moved, 1 of 3 clients of the stopped instance landed on the survivor instead of the replacement. Run 2: **1 of 2 survivor clients moved** to the replacement, 1 of 4 clients of the stopped instance landed on the survivor |
+
+Net effect of one instance failure: run 1 — 3 of 6 users lost their session, run 2 — 5 of 6.
+Users of the surviving instance are **not** protected.
+
+### Option B results
+
+Two runs.
+
+| Check | Result |
+|---|---|
+| API Gateway listeners 8083/8084 | ✅ Already in the gateway job → no redeploy needed (0 allocations replaced) |
+| Per-instance gateway ports | ✅ On all 3 nodes: `:8083` → only `sticky-0`, `:8084` → only `sticky-1` (5/5 each) — `tcp-route` to a virtual service works at runtime |
+| Set-Cookie on first request | ✅ 8/8 requests without cookie got `STICKY_ROUTE`, spread over both instances |
+| Stickiness across nodes | ✅ 6/6 clients hit one instance for all 9 requests, rotating over 3 nginx nodes (both runs) |
+| Instance stopped | ✅ Its clients served by the other instance on the next request (≤ 3 s), no errors |
+| Replacement back (~18–21 s later, same ordinal → same gateway port) | ✅ All clients of the stopped instance back on the replacement; **all clients of the surviving instance stayed** (run 1: 5/5, run 2: 3/3) |
+
+Net effect of one instance failure: only the users of the failed instance lose their session (run 1:
+1 of 6, run 2: 3 of 6) — twice if they make requests during the outage (survivor, then
+replacement). Users of the surviving instance are never affected.
 
 Sources:
 - [nginx upstream `hash`](https://nginx.org/en/docs/http/ngx_http_upstream_module.html#hash)

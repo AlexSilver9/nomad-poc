@@ -28,6 +28,7 @@ Hazelcast cluster or read session data off the wire.
 | Normal mesh upstream to `hz` service | Load-balances across members — cannot address one **specific** member |
 | Transparent proxy | Only one `connect` block per group (HTTPS + Hazelcast need two); inbound redirect goes to a single `local_service_port`; `DialedDirectly` not documented for Nomad bridge mode |
 | **One virtual mesh service per member** | **Chosen** — mTLS + intentions, OSS only, no new certificates to manage |
+| No clustering: isolated instances + sticky sessions | Removes Hazelcast entirely, but sessions are not shared — see [Alternative: isolated instances](#alternative-isolated-instances--sticky-sessions) |
 
 ---
 
@@ -327,6 +328,65 @@ reverse order.
 | Ordinal overlap during updates | Old and new alloc with the same ordinal can briefly coexist (shutdown phase); `max_parallel = 1` and `OnlyPassing` keep this short |
 | Config entries per service | 3 + N entries per clustered service — must be templated for all web services |
 | Application server image change | Hazelcast discovery must switch from Consul to TCP-IP member list + `public-address` |
+
+---
+
+## Alternative: isolated instances + sticky sessions
+
+Instead of securing the Hazelcast traffic, avoid it: scale with **standalone instances that do not
+cluster at all**, and keep each user on one instance via sticky sessions. Details and test results:
+[STICKY_SESSIONS.md](STICKY_SESSIONS.md), Option B.
+
+```text
+ALB → nginx (TLS termination, route cookie, hash)
+    → API Gateway port per instance → my-service-<N> (virtual service) → subset ordinal-<N>
+    → mTLS → sidecar → instance N    (no Hazelcast, instances never talk to each other)
+```
+
+It reuses this document's building blocks — ordinal tags on service + sidecar, resolver subsets
+with `OnlyPassing`, redirect resolvers as virtual services — but for **nginx → one instance**
+instead of **member → member**. Using the gateway ports for Hazelcast itself is not an option: the
+listeners accept unauthenticated TCP from the VPC, and the target sees every connection as
+`api-gateway` (no member identity for intentions).
+
+### Requirements
+
+| Requirement | Detail |
+|---|---|
+| Hazelcast really disabled | With Hazelcast still enabled (e.g. Consul discovery), the instances find each other and cluster anyway, and the Hazelcast port stays open. Payara: `set-hazelcast-configuration --enabled=false` (e.g. as post-boot command) — check whether this can be supplied by the job or needs an image change |
+| No other Hazelcast use in the apps | Payara also uses Hazelcast for JCache, `@Clustered` beans, distributed EJB timers |
+| Per-instance state acceptable | Caches, timers/crons, rate-limit or lockout counters exist once per instance; timers run once per instance |
+
+### Scaling
+
+Possible, but a **planned change**, not `nomad job scale`: every instance needs its own subset,
+redirect resolver, `tcp-route`, gateway listener + port and an nginx upstream line, and changing
+gateway listeners redeploys the API Gateway (brief interruption of all services). Like
+`variable "members"` here, one instance count should generate all of it.
+
+### Effect on users
+
+| Event | Effect |
+|---|---|
+| Instance fails | Only its users log in again; users of the other instances are unaffected (verified on the POC cluster) |
+| Scale up 2 → 3 | Consistent hash moves ~1/3 of the users to the new instance → they log in again |
+| Scale down | Users of the removed instance log in again |
+| Rolling deployment | Every user logs in again, mostly twice (to another instance and back) |
+| Load distribution | Even for new users; existing users are not rebalanced |
+
+### Comparison with the Hazelcast mesh
+
+| | Hazelcast mesh | Isolated instances + sticky |
+|---|---|---|
+| Sessions survive instance loss / deployment | ✅ (within `backup-count`, same Hazelcast version) | ❌ Users of the affected instance log in again |
+| Hazelcast attack surface | Secured (mTLS + intentions) | None — Hazelcast off |
+| Image change | Hazelcast discovery → TCP-IP member list + `public-address` | Possibly none (disable Hazelcast via config) |
+| Config per service | Resolver + one redirect per member + upstreams | Resolver + one redirect, `tcp-route`, gateway listener/port per instance + nginx upstream |
+| Scaling | Fixed member count, scripted | Fixed instance count, scripted + gateway redeploy |
+
+Fits services where logging in again is acceptable and the instance count rarely changes (2–3).
+Services that need sessions to survive deployments need shared state: the Hazelcast mesh, or an
+external store ([REDIS_SESSIONS.md](REDIS_SESSIONS.md)).
 
 ---
 
